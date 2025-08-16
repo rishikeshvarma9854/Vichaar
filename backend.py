@@ -115,14 +115,14 @@ def root():
         "status": "active",
         "timestamp": datetime.now().isoformat(),
         "endpoints": {
-            "test": "/api/test-kmit",
-            "attendance": "/api/attendance",
-            "results": "/api/results",
-            "timetable": "/api/timetable"
+            "test": "/test-kmit",
+            "attendance": "/attendance",
+            "results": "/results",
+            "timetable": "/timetable"
         }
     })
 
-@app.route('/api/test-kmit', methods=['GET'])
+@app.route('/test-kmit', methods=['GET'])
 def test_kmit():
     """
     Test endpoint to check KMIT API connectivity and see what it expects
@@ -153,7 +153,7 @@ def test_kmit():
             "error": f"Test failed: {str(e)}"
         }), 500
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/login', methods=['POST'])
 def login():
     try:
         # Get login data from frontend
@@ -351,44 +351,7 @@ def login_with_token_direct():
             "error": f"Server error: {str(e)}"
         }), 500
 
-@app.route('/api/student-profile/<student_id>', methods=['GET'])
-def get_student_profile(student_id):
-    try:
-        # Get authorization header from frontend
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({"success": False, "error": "No authorization token"}), 401
-        
-        headers = {
-            'Authorization': auth_header,
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
-        }
-        
-        response = requests.get(
-            f"{KMIT_API_BASE}/studentmaster/studentprofile/{student_id}",
-            headers=headers,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            return jsonify({
-                "success": True,
-                "data": response.json()
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "error": f"Failed to fetch profile: {response.status_code}"
-            }), 400
-            
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Server error: {str(e)}"
-        }), 500
-
-@app.route('/api/attendance', methods=['GET'])
+@app.route('/attendance', methods=['GET'])
 def get_attendance():
     try:
         auth_header = request.headers.get('Authorization')
@@ -459,7 +422,7 @@ def get_attendance():
             "error": f"Server error: {str(e)}"
         }), 500
 
-@app.route('/api/notices-count', methods=['GET'])
+@app.route('/notices-count', methods=['GET'])
 def get_notices_count():
     try:
         auth_header = request.headers.get('Authorization')
@@ -495,7 +458,7 @@ def get_notices_count():
             "error": f"Server error: {str(e)}"
         }), 500
 
-@app.route('/api/test-attendance', methods=['GET'])
+@app.route('/test-attendance', methods=['GET'])
 def test_attendance():
     """Test endpoint to see KMIT attendance API structure"""
     try:
@@ -541,7 +504,7 @@ def test_attendance():
             "error": f"Attendance test failed: {str(e)}"
         }), 500
 
-@app.route('/api/subject-attendance', methods=['GET'])
+@app.route('/subject-attendance', methods=['GET'])
 def get_subject_attendance():
     """Fetch subject-wise attendance from KMIT API"""
     try:
@@ -591,12 +554,12 @@ def get_subject_attendance():
             "error": f"Server error: {str(e)}"
         }), 500
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({"status": "healthy", "message": "KMIT Vichaar Backend is running"})
 
-@app.route('/api/search-students', methods=['GET'])
+@app.route('/search-students', methods=['GET'])
 def search_students():
     """Search for students by name or hall ticket number"""
     try:
@@ -753,7 +716,7 @@ def store_student_data(student_data, kmit_id):
         print(f"Failed to store student data: {e}")
         # Don't fail the login if database storage fails
 
-@app.route('/api/internal-results', methods=['GET'])
+@app.route('/internal-results', methods=['GET'])
 def get_internal_results():
     """
     Fetch internal assessment results from KMIT API
@@ -815,7 +778,7 @@ def get_internal_results():
         print(f"Unexpected error: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/api/semester-results', methods=['GET'])
+@app.route('/semester-results', methods=['GET'])
 def get_semester_results():
     """
     Fetch semester results from KMIT API
@@ -878,7 +841,7 @@ def get_semester_results():
         print(f"Unexpected error: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/api/timetable', methods=['GET'])
+@app.route('/timetable', methods=['GET'])
 def get_timetable():
     """
     Fetch timetable from KMIT API
@@ -976,6 +939,21 @@ def get_student_profile_direct(student_id):  # Different function name
             "success": False,
             "error": f"Server error: {str(e)}"
         }), 500
+
+@app.route('/debug/search/<hall_ticket>', methods=['GET'])
+def debug_search(hall_ticket):
+    """Debug search functionality"""
+    try:
+        # This will help us see what's in your database
+        return jsonify({
+            "message": f"Searching for hall ticket: {hall_ticket}",
+            "timestamp": "2025-08-17",
+            "note": "Check your Supabase dashboard for actual data"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 if __name__ == '__main__':
     print("🚀 Starting KMIT Vichaar Backend...")
