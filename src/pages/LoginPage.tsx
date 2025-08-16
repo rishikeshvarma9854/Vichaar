@@ -86,7 +86,7 @@ export default function LoginPage() {
     }
 
     if (!captchaToken) {
-      toast.error('Please complete the captcha verification')
+      toast.error('Please complete the security verification')
       return
     }
 
@@ -97,20 +97,32 @@ export default function LoginPage() {
       console.log('Search query:', searchQuery.trim())
       console.log('Captcha token:', captchaToken ? 'Present' : 'Missing')
       
-      // Optimized search: Try hall ticket first (most common and fastest)
+      // Enhanced search: Try multiple search strategies
       let searchResults = null
       let searchError = null
       
-      // Check if search query looks like a hall ticket (alphanumeric)
+      // Strategy 1: Try exact hall ticket match first (fastest)
       if (/^[A-Z0-9]+$/.test(searchQuery.trim())) {
-        console.log('🔍 Fast search by hall ticket:', searchQuery.trim())
+        console.log('🔍 Fast search by exact hall ticket:', searchQuery.trim())
         const result = await supabaseDB.searchByHallTicket(searchQuery.trim())
         searchResults = result.data
         searchError = result.error
-      } else {
-        // Fallback to name search
-        console.log('🔍 Search by name:', searchQuery.trim())
+      }
+      
+      // Strategy 2: If no results, try partial name search
+      if ((!searchResults || searchResults.length === 0) && searchQuery.trim().length >= 2) {
+        console.log('🔍 Partial name search:', searchQuery.trim())
         const result = await supabaseDB.searchByName(searchQuery.trim())
+        if (result.data && result.data.length > 0) {
+          searchResults = result.data
+          searchError = result.error
+        }
+      }
+      
+      // Strategy 3: If still no results, try broader search
+      if (!searchResults || searchResults.length === 0) {
+        console.log('🔍 Broad search:', searchQuery.trim())
+        const result = await supabaseDB.searchStudent(searchQuery.trim())
         searchResults = result.data
         searchError = result.error
       }
@@ -125,23 +137,10 @@ export default function LoginPage() {
       console.log('Number of results:', searchResults?.length || 0)
 
       if (searchResults && searchResults.length > 0) {
-        // Found student(s) - now get credentials and login automatically
-        const student = searchResults[0] // Use first result for now
-        console.log('Found student:', student)
-        
-        // Get credentials for this student
-        const { data: credentials, error: credError } = await supabaseDB.getCredentials(student.mobile_number)
-        
-        if (credError || !credentials) {
-          console.error('Failed to get credentials:', credError)
-          toast.error('Student found but login failed. Please try again.')
-          return
-        }
-
-        console.log('Got credentials for:', student.mobile_number)
-        
-        // Now automatically login to KMIT API using stored credentials + captcha
-        await autoLoginToKMIT(credentials.mobile_number, credentials.password, student)
+        // Found student(s) - show results for selection
+        setSearchResults(searchResults)
+        setHasSearched(true)
+        toast.success(`Found ${searchResults.length} student(s)!`)
         
       } else {
         setSearchResults([])
@@ -244,6 +243,31 @@ export default function LoginPage() {
     
     // Navigate to dashboard
     navigate('/dashboard')
+  }
+
+  // Handle when a student result is clicked
+  const handleStudentClick = async (student: any) => {
+    try {
+      console.log('🎯 Student selected:', student)
+      
+      // Get credentials for this student
+      const { data: credentials, error: credError } = await supabaseDB.getCredentials(student.mobile_number)
+      
+      if (credError || !credentials) {
+        console.error('Failed to get credentials:', credError)
+        toast.error('Student found but login failed. Please try again.')
+        return
+      }
+
+      console.log('Got credentials for:', student.mobile_number)
+      
+      // Now automatically login to KMIT API using stored credentials + captcha
+      await autoLoginToKMIT(credentials.mobile_number, credentials.password, student)
+      
+    } catch (error: any) {
+      console.error('Student selection error:', error)
+      toast.error('Failed to select student. Please try again.')
+    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -389,52 +413,65 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {hasSearched && searchResults.length > 0 && (
-            <div className="mt-6">
+          {/* Search Results */}
+          {hasSearched && (
+            <div className="mt-8">
               <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
-                Search Results ({searchResults.length} found)
+                Search Results
               </h3>
-              <div className="space-y-4">
-                {searchResults.map((student, index) => (
-                  <div key={index} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
-                          {student.name}
-                        </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                          <span className="font-medium">Hall Ticket:</span> {student.hallTicket}
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                          <span className="font-medium">Branch:</span> {student.branch}
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                          <span className="font-medium">Year:</span> {student.year} | <span className="font-medium">Semester:</span> {student.semester}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Last updated: {new Date(student.lastUpdated).toLocaleString()}
-                        </p>
+              
+              {searchResults.length > 0 ? (
+                <div className="space-y-3">
+                  {searchResults.map((student: any, index: number) => (
+                    <div
+                      key={student.id || index}
+                      onClick={() => handleStudentClick(student)}
+                      className="bg-gray-800 dark:bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200 border border-gray-600 dark:border-gray-500"
+                    >
+                      <div className="flex items-center space-x-4">
+                        {/* Icon */}
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                            <User className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                        
+                        {/* Student Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-lg font-bold text-white truncate">
+                            {student.hall_ticket || 'No Hall Ticket'}
+                          </div>
+                          <div className="text-sm text-gray-300">
+                            {student.name ? `Name: ${student.name}` : 'No Name'}
+                          </div>
+                          {student.branch && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {student.branch}
+                            </div>
+                          )}
+                          {student.year && (
+                            <div className="text-xs text-gray-400">
+                              Current Year: {student.year}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Click Indicator */}
+                        <div className="flex-shrink-0">
+                          <ArrowRight className="w-5 h-5 text-gray-400" />
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleViewStudent(student)}
-                        className="btn-primary flex items-center space-x-2 px-4 py-2 ml-4"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>View Dashboard</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
                     </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-lg mb-2">No students found</div>
+                  <div className="text-gray-500 text-sm">
+                    Try searching with a different name or hall ticket number
                   </div>
-                ))}
-              </div>
-              <div className="mt-4 text-center">
-                <button
-                  onClick={handleClearSearch}
-                  className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  Clear Search
-                </button>
-              </div>
+                </div>
+              )}
             </div>
           )}
 
