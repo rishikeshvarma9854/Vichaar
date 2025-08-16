@@ -4,7 +4,7 @@ import axios from 'axios'
 // For local development: http://localhost:5000/api
 // For ngrok: Change this to your ngrok backend URL
 // Example: const BACKEND_BASE_URL = 'https://your-ngrok-url.ngrok.io/api'
-const BACKEND_BASE_URL = 'http://localhost:5000/api'
+const BACKEND_BASE_URL = 'https://vichaar-backend.onrender.com'
 
 console.log('🌐 Backend URL:', BACKEND_BASE_URL)
 console.log('📍 Current location:', window.location.href)
