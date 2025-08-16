@@ -60,7 +60,7 @@ export default function LoginPage() {
       console.log('Initializing hCaptcha...')
       
       const widgetId = window.hcaptcha.render('hcaptcha-container', {
-        sitekey: '67f82236-2c1a-49d6-a37e-7112fd52364e',
+        sitekey: '898273e0-27c2-47fa-bf84-7bb23b6432d4',
         callback: handleHcaptchaVerify,
         'expired-callback': handleHcaptchaExpired,
         'error-callback': handleHcaptchaError,
