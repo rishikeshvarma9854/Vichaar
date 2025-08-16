@@ -119,51 +119,92 @@ export default function LoginPage() {
         token: captchaToken
       }
       
+      // 🔍 ADD DETAILED LOGGING HERE:
+      console.log('🔍 Search Login Request Details:');
+      console.log('URL:', 'https://kmit-api.teleuniv.in/auth/login');
+      console.log('Method:', 'POST');
+      console.log('Headers:', {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Origin': 'https://kmit.teleuniv.in',
+        'Referer': 'https://kmit.teleuniv.in/',
+        'Connection': 'keep-alive'
+      });
+      console.log('Payload:', { ...loginPayload, token: '***' });
+      console.log('Timestamp:', new Date().toISOString());
+      console.log('Student Profile:', studentProfile);
+      
       console.log('Login payload:', { ...loginPayload, token: '***' })
       
-      // Make request to KMIT API
-      const response = await fetch('https://kmit-api.teleuniv.in/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br, zstd',
-          'Origin': 'https://kmit.teleuniv.in',
-          'Referer': 'https://kmit.teleuniv.in/',
-          'Connection': 'keep-alive'
-        },
-        body: JSON.stringify(loginPayload)
-      })
+      // Make request to KMIT API with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('🕐 Request timeout after 10 seconds - aborting');
+        controller.abort();
+      }, 10000); // 10 second timeout
       
-      const kmitData = await response.json()
-      console.log('KMIT API response:', kmitData)
-      
-      if (response.status === 201 && kmitData.access_token) {
-        // Login successful - store tokens and navigate to dashboard
-        console.log('✅ Auto-login successful!')
+      try {
+        const response = await fetch('https://kmit-api.teleuniv.in/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br, zstd',
+            'Origin': 'https://kmit.teleuniv.in',
+            'Referer': 'https://kmit.teleuniv.in/',
+            'Connection': 'keep-alive'
+          },
+          body: JSON.stringify(loginPayload),
+          signal: controller.signal
+        })
         
-        // Store tokens
-        localStorage.setItem('kmit_access_token', kmitData.access_token)
-        localStorage.setItem('kmit_refresh_token', kmitData.refresh_token)
-        localStorage.setItem('kmit_student_id', kmitData.sub?.toString() || '')
+        clearTimeout(timeoutId); // Clear timeout since request completed
         
-        // Store current student profile with mobile number
-        const enhancedStudentProfile = {
-          ...studentProfile,
-          mobile_number: mobileNumber // Ensure mobile number is included
+        const kmitData = await response.json()
+        console.log('KMIT API response:', kmitData)
+        
+        if (response.status === 201 && kmitData.access_token) {
+          // Login successful - store tokens and navigate to dashboard
+          console.log('✅ Auto-login successful!')
+          
+          // Store tokens
+          localStorage.setItem('kmit_access_token', kmitData.access_token)
+          localStorage.setItem('kmit_refresh_token', kmitData.refresh_token)
+          localStorage.setItem('kmit_student_id', kmitData.sub?.toString() || '')
+          
+          // Store current student profile with mobile number
+          const enhancedStudentProfile = {
+            ...studentProfile,
+            mobile_number: mobileNumber // Ensure mobile number is included
+          }
+          localStorage.setItem('currentStudent', JSON.stringify(enhancedStudentProfile))
+          
+          toast.success('Login successful! Redirecting to dashboard...')
+          
+          // Navigate to dashboard
+          navigate('/dashboard')
+          
+        } else {
+          console.error('KMIT API login failed:', kmitData)
+          toast.error('Login failed. Please try again.')
         }
-        localStorage.setItem('currentStudent', JSON.stringify(enhancedStudentProfile))
         
-        toast.success('Login successful! Redirecting to dashboard...')
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId); // Clear timeout
         
-        // Navigate to dashboard
-        navigate('/dashboard')
-        
-      } else {
-        console.error('KMIT API login failed:', kmitData)
-        toast.error('Login failed. Please try again.')
+        if (fetchError.name === 'AbortError') {
+          console.error('🕐 KMIT API request timed out after 10 seconds');
+          toast.error('Login request timed out. Please try again.');
+        } else {
+          console.error('Fetch error:', fetchError);
+          toast.error('Network error. Please try again.');
+        }
+        throw fetchError; // Re-throw to be caught by outer catch
       }
       
     } catch (error: any) {
