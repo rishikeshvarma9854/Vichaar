@@ -148,8 +148,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   const [showAttendanceDetails, setShowAttendanceDetails] = useState(false)
-  const [attendanceDetails] = useState<any>(null)
-  const [subjectAttendance] = useState<any>(null)
+  const [attendanceDetails, setAttendanceDetails] = useState<any>(null)
+  const [subjectAttendance, setSubjectAttendance] = useState<any>(null)
   
   const [showResultsDetails, setShowResultsDetails] = useState(false)
   const [activeResultsTab, setActiveResultsTab] = useState<'internal' | 'semester'>('internal')
@@ -193,129 +193,9 @@ export default function DashboardPage() {
     console.log('🔄 isLoading:', isLoading)
   }, [studentData, attendanceDetails, subjectAttendance, isLoading])
 
-  // Debug: Check database state
-  const checkDatabaseState = async () => {
-    try {
-      console.log('🧪 Testing database connection...')
-      
-      // Test search to see if we can connect
-      const searchTest = await supabaseDB.searchStudent('test')
-      console.log('🧪 Search test result:', searchTest)
-      
-      // Get all profiles
-      const { data: allProfiles, error: profilesError } = await supabase
-        .from('student_profiles')
-        .select('*')
-      console.log('🧪 All profiles in database:', allProfiles)
-      console.log('🧪 Profiles error:', profilesError)
-      
-      // Get all credentials
-      const { data: allCredentials, error: credentialsError } = await supabase
-        .from('student_credentials')
-        .select('*')
-      console.log('🧪 All credentials in database:', allCredentials)
-      console.log('🧪 Credentials error:', credentialsError)
-      
-      if (!profilesError && !credentialsError) {
-        console.log('✅ Database connection successful')
-        console.log('📊 Found', allProfiles?.length || 0, 'profiles and', allCredentials?.length || 0, 'credentials')
-      } else {
-        console.error('❌ Database connection failed:', { profilesError, credentialsError })
-      }
-    } catch (error) {
-      console.error('❌ Error checking database state:', error)
-    }
-  }
 
-  // Manual test function for debugging
-  const testDatabaseOperations = async () => {
-    try {
-      console.log('🧪 ===== MANUAL DATABASE TEST START =====')
-      
-      const testMobileNumber = '9177511236'
-      console.log('🧪 Testing with mobile number:', testMobileNumber)
-      
-      // Test 1: Check credentials
-      console.log('🧪 Test 1: Checking credentials...')
-      const credsCheck = await supabaseDB.getCredentials(testMobileNumber)
-      console.log('🧪 Credentials check result:', credsCheck)
-      
-      // Test 2: Check profile
-      console.log('🧪 Test 2: Checking profile...')
-      const profileCheck = await supabaseDB.getProfile(testMobileNumber)
-      console.log('🧪 Profile check result:', profileCheck)
-      
-      // Test 3: Try to insert credentials if they don't exist
-      if (!credsCheck.data) {
-        console.log('🧪 Test 3: Inserting test credentials...')
-        const credsInsert = await supabaseDB.insertCredentials(testMobileNumber, 'test_password')
-        console.log('🧪 Credentials insert result:', credsInsert)
-      }
-      
-      // Test 4: Try to insert a test profile
-      console.log('🧪 Test 4: Inserting test profile...')
-      const testProfileData = {
-        mobile_number: testMobileNumber,
-        hall_ticket: 'TEST123',
-        name: 'Test Student',
-        branch: 'Test Branch',
-        year: '1',
-        semester: '1',
-        student_image: undefined,
-        qr_code: undefined,
-        profile_data: { test: true }
-      }
-      
-      const profileInsert = await supabaseDB.insertProfile(testProfileData)
-      console.log('🧪 Profile insert result:', profileInsert)
-      
-      // Test 5: Check final state
-      console.log('🧪 Test 5: Checking final state...')
-      await checkDatabaseState()
-      
-      console.log('🧪 ===== MANUAL DATABASE TEST END =====')
-      
-    } catch (error) {
-      console.error('❌ Manual database test failed:', error)
-    }
-  }
 
-  // Test the exact profile data that's failing
-  const testExactProfileData = async () => {
-    try {
-      console.log('🧪 ===== TESTING EXACT PROFILE DATA =====')
-      
-      const testMobileNumber = '9177511236'
-      console.log('🧪 Testing with mobile number:', testMobileNumber)
-      
-      // Create the exact profile data structure that's failing
-      const exactProfileData = {
-        mobile_number: testMobileNumber,
-        hall_ticket: '23BD1A665W',
-        name: 'YERUBANDI SAI VINEEL',
-        branch: 'COMPUTER SCIENCE AND ENGINEERING (AIML)',
-        year: '3',
-        semester: '1',
-        student_image: 'data:image/jpg;base64,/9j/4QBYRXhpZgAASUkqAAgAAAAE...',
-        qr_code: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQA...',
-        profile_data: { test: 'exact_data' }
-      }
-      
-      console.log('🧪 Exact profile data to test:', exactProfileData)
-      
-      // Try to insert this exact data
-      const result = await supabaseDB.insertProfile(exactProfileData)
-      console.log('🧪 Insert result for exact data:', result)
-      
-      // Check final state
-      await checkDatabaseState()
-      
-      console.log('🧪 ===== EXACT PROFILE DATA TEST END =====')
-      
-    } catch (error) {
-      console.error('❌ Exact profile data test failed:', error)
-    }
-  }
+
 
   // Handle attendance button click
   const handleAttendanceClick = async () => {
@@ -324,8 +204,23 @@ export default function DashboardPage() {
       return
     }
 
-    // Show the modal with existing data
+    // Show the modal and load fresh attendance data
     setShowAttendanceDetails(true)
+    
+    // Load fresh attendance data if not already loaded
+    if (!attendanceDetails) {
+      try {
+        console.log('🔄 Loading fresh attendance data...')
+        const attendanceResponse = await apiClient.getAttendance()
+        if (attendanceResponse.success && attendanceResponse.data?.payload) {
+          setAttendanceDetails(attendanceResponse.data)
+          console.log('✅ Fresh attendance data loaded')
+        }
+      } catch (error) {
+        console.error('❌ Failed to load fresh attendance data:', error)
+        toast.error('Failed to load attendance data')
+      }
+    }
   }
 
   // Handle results button click
@@ -515,8 +410,7 @@ export default function DashboardPage() {
     const checkAuthAndFetchData = async () => {
       console.log('Checking authentication...')
       
-      // Always check database state first to see what's in there
-      await checkDatabaseState()
+
       
       // Check both context authentication and KMIT API authentication
       const contextAuthenticated = isAuthenticated
@@ -595,6 +489,90 @@ export default function DashboardPage() {
                 
                 console.log('🔄 ===== PROFILE UPDATE SECTION END =====')
                 
+                // Now fetch attendance data
+                console.log('🔄 ===== ATTENDANCE DATA LOADING START =====')
+                try {
+                  const attendanceResponse = await apiClient.getAttendance()
+                  if (attendanceResponse.success && attendanceResponse.data?.payload) {
+                    const kmitData = attendanceResponse.data.payload
+                    console.log('✅ KMIT attendance data loaded:', kmitData)
+                    
+                    // Convert KMIT attendance format to our format
+                    const realAttendance = {
+                      overall: parseFloat(kmitData.overallAttendance) || 0,
+                      present: 0,
+                      absent: 0,
+                      noSessions: 0,
+                      sessions: kmitData.attendanceDetails || []
+                    }
+                    
+                    // Calculate present/absent from TODAY'S attendance only
+                    if (kmitData.attendanceDetails && kmitData.attendanceDetails.length > 0) {
+                      const todayData = kmitData.attendanceDetails.find((day: any) => day.date === "Today")
+                      console.log('📅 Today data:', todayData)
+                      
+                      if (todayData && todayData.periods) {
+                        console.log('📅 Today\'s attendance data:', todayData)
+                        console.log('📚 Today\'s periods:', todayData.periods)
+                        
+                        // Count present/absent for today
+                        realAttendance.present = todayData.periods.filter((period: any) => 
+                          period.status === 1
+                        ).length
+                        realAttendance.absent = todayData.periods.filter((period: any) => 
+                          period.status === 0
+                        ).length
+                        realAttendance.noSessions = todayData.periods.filter((period: any) => 
+                          period.status === 2
+                        ).length
+                        
+                        console.log('📊 Today\'s counts:', {
+                          present: realAttendance.present,
+                          absent: realAttendance.absent,
+                          noSessions: realAttendance.noSessions
+                        })
+                      }
+                    }
+                    
+                    // Store the full KMIT attendance data for the modal
+                    setAttendanceDetails(attendanceResponse.data)
+                    
+                    // Update student data with real attendance
+                    setStudentData(prevData => {
+                      if (prevData) {
+                        return {
+                          ...prevData,
+                          attendance: realAttendance
+                        }
+                      }
+                      return prevData
+                    })
+                    
+                    console.log('🎯 Updated student data with REAL KMIT attendance')
+                    toast.success(`Loaded attendance: ${realAttendance.overall}%`)
+                  } else {
+                    console.warn('⚠️ No attendance data in response')
+                  }
+                } catch (attendanceError) {
+                  console.error('❌ Failed to fetch attendance:', attendanceError)
+                  toast.error('Could not fetch attendance data')
+                }
+                
+                console.log('🔄 ===== ATTENDANCE DATA LOADING END =====')
+                
+                // Now fetch subject attendance data
+                console.log('🔄 ===== SUBJECT ATTENDANCE LOADING START =====')
+                try {
+                  const subjectResponse = await apiClient.getSubjectAttendance()
+                  if (subjectResponse.success) {
+                    setSubjectAttendance(subjectResponse.data)
+                    console.log('✅ Subject attendance loaded:', subjectResponse.data)
+                  }
+                } catch (subjectError) {
+                  console.error('❌ Failed to fetch subject attendance:', subjectError)
+                }
+                console.log('🔄 ===== SUBJECT ATTENDANCE LOADING END =====')
+                
               } else {
                 console.error('❌ No student data in profile response')
               }
@@ -627,96 +605,7 @@ export default function DashboardPage() {
     navigate('/')
   }
 
-  // Check database table structure
-  const checkDatabaseStructure = async () => {
-    try {
-      console.log('🧪 ===== CHECKING DATABASE STRUCTURE =====')
-      
-      // Test 1: Check if student_credentials table exists and has data
-      const { data: credsData, error: credsError } = await supabase
-        .from('student_credentials')
-        .select('*')
-        .limit(1)
-      console.log('🧪 student_credentials table test:', { data: credsData, error: credsError })
-      
-      // Test 2: Check if student_profiles table exists and has data
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('student_profiles')
-        .select('*')
-        .limit(1)
-      console.log('🧪 student_profiles table test:', { data: profilesData, error: profilesError })
-      
-      // Test 3: Check if login_mappings table exists and has data
-      const { data: mappingsData, error: mappingsError } = await supabase
-        .from('login_mappings')
-        .select('*')
-        .limit(1)
-      console.log('🧪 login_mappings table test:', { data: mappingsData, error: mappingsError })
-      
-      // Test 4: Try to get table info
-      try {
-        const { data: tableInfo, error: tableError } = await supabase
-          .rpc('get_table_info', { table_name: 'student_profiles' })
-        console.log('🧪 Table info:', { data: tableInfo, error: tableError })
-      } catch (e) {
-        console.log('🧪 Could not get table info (RPC not available):', e)
-      }
-      
-      console.log('🧪 ===== DATABASE STRUCTURE CHECK END =====')
-      
-    } catch (error) {
-      console.error('❌ Database structure check failed:', error)
-    }
-  }
 
-  // Test Supabase connection directly
-  const testSupabaseConnection = async () => {
-    try {
-      console.log('🧪 ===== TESTING SUPABASE CONNECTION =====')
-      
-      // Test 1: Basic connection test
-      console.log('🧪 Test 1: Testing basic connection...')
-      const { data: testData, error: testError } = await supabase
-        .from('student_credentials')
-        .select('count')
-        .limit(1)
-      console.log('🧪 Basic connection test:', { data: testData, error: testError })
-      
-      // Test 2: Check environment variables
-      console.log('🧪 Test 2: Checking environment variables...')
-      console.log('🧪 VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Not set')
-      console.log('🧪 VITE_SUPABASE_ANON_KEY:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Not set')
-      
-      // Test 3: Try a simple insert operation
-      console.log('🧪 Test 3: Testing simple insert operation...')
-      const testInsertData = {
-        mobile_number: 'TEST_' + Date.now(),
-        password: 'test_password'
-      }
-      
-      const { data: insertData, error: insertError } = await supabase
-        .from('student_credentials')
-        .insert([testInsertData])
-        .select()
-      
-      console.log('🧪 Simple insert test:', { data: insertData, error: insertError })
-      
-      // Test 4: Clean up test data
-      if (insertData && insertData.length > 0) {
-        console.log('🧪 Test 4: Cleaning up test data...')
-        const { error: deleteError } = await supabase
-          .from('student_credentials')
-          .delete()
-          .eq('mobile_number', testInsertData.mobile_number)
-        console.log('🧪 Cleanup result:', { error: deleteError })
-      }
-      
-      console.log('🧪 ===== SUPABASE CONNECTION TEST END =====')
-      
-    } catch (error) {
-      console.error('❌ Supabase connection test failed:', error)
-    }
-  }
 
 
   if (isLoading) {
@@ -791,44 +680,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Debug Section - Remove this in production */}
-        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-3">
-            🧪 Debug Tools (Remove in Production)
-          </h3>
-          <div className="space-y-2">
-            <button
-              onClick={checkDatabaseState}
-              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-            >
-              Check Database State
-            </button>
-            <button
-              onClick={testDatabaseOperations}
-              className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm ml-2"
-            >
-              Test Database Operations
-            </button>
-            <button
-              onClick={testExactProfileData}
-              className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm ml-2"
-            >
-              Test Exact Profile Data
-            </button>
-            <button
-              onClick={checkDatabaseStructure}
-              className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm ml-2"
-            >
-              Check Database Structure
-            </button>
-            <button
-              onClick={testSupabaseConnection}
-              className="px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm ml-2"
-            >
-              Test Supabase Connection
-            </button>
-          </div>
-        </div>
+
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
