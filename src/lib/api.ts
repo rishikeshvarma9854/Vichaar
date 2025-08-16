@@ -392,7 +392,7 @@ class KMITVichaarAPI {
   }
 
   // Search for student by hall ticket or name
-  async searchStudent(query: string): Promise<StudentData> {
+  async searchStudent(_query: string): Promise<StudentData> {
     // For now, we'll use a mock approach since we don't have the exact student lookup endpoint
     // In production, you'd implement the student search logic here
     
