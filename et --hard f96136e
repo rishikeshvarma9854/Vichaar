@@ -1,0 +1,20 @@
+[33m5faab10[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m data logging fixed
+[33m5a3060a[m data logging fixed
+[33md3bbb62[m data logging fixed
+[33mbf1beff[m data logging fixed
+[33m2f67dc1[m data logging fixed
+[33mf96136e[m improved home page with clear routes
+[33m1b5e0a9[m improvised search routes
+[33m8164fe6[m improvised search routes
+[33ma4b937b[m improved search results
+[33m606d08d[m captcha issue fixed
+[33m2ea55ab[m captcha issue fixex
+[33md185616[m fixed search logic
+[33m1912a3c[m improved delay
+[33m8a01a69[m fixed search logic
+[33m378f298[m updated backend routes
+[33m9caa5a3[m fixed 404
+[33me2603cb[m Fixing endpoints
+[33mad8cd51[m Fixing endpoints
+[33m716d781[m added get route
+[33maf7677b[m Fix CORS config for frontend

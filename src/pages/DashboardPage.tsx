@@ -35,31 +35,33 @@ const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
     // Try multiple sources to find the mobile number
     let mobileNumber = null
     
-    // Source 1: Check localStorage for currentStudent
-    const currentStudent = localStorage.getItem('currentStudent')
-    if (currentStudent) {
-      try {
-        const studentInfo = JSON.parse(currentStudent)
-        mobileNumber = studentInfo.mobile_number || studentInfo.hallTicket
-        console.log('📱 Found mobile number from currentStudent:', mobileNumber)
-      } catch (e) {
-        console.log('⚠️ Failed to parse currentStudent from localStorage')
+    // Source 1: PRIORITY - Get mobile number from KMIT API response (most reliable)
+    if (fullPayload?.student?.phone) {
+      mobileNumber = fullPayload.student.phone
+      console.log('📱 PRIORITY: Found mobile number from KMIT API response:', mobileNumber)
+    }
+    
+    // Source 2: SECOND PRIORITY - Get mobile number from profileData
+    if (!mobileNumber && profileData.phone) {
+      mobileNumber = profileData.phone
+      console.log('📱 SECOND PRIORITY: Found mobile number from profileData.phone:', mobileNumber)
+    }
+    
+    // Source 3: THIRD PRIORITY - Check localStorage for currentStudent (only if API didn't provide mobile)
+    if (!mobileNumber) {
+      const currentStudent = localStorage.getItem('currentStudent')
+      if (currentStudent) {
+        try {
+          const studentInfo = JSON.parse(currentStudent)
+          mobileNumber = studentInfo.mobile_number || studentInfo.hallTicket
+          console.log('📱 THIRD PRIORITY: Found mobile number from currentStudent:', mobileNumber)
+        } catch (e) {
+          console.log('⚠️ Failed to parse currentStudent from localStorage')
+        }
       }
     }
     
-    // Source 2: Try to get mobile number from KMIT API response
-    if (!mobileNumber && fullPayload?.student?.phone) {
-      mobileNumber = fullPayload.student.phone
-      console.log('📱 Found mobile number from KMIT API response:', mobileNumber)
-    }
-    
-    // Source 2.5: Try to get mobile number from profileData
-    if (!mobileNumber && profileData.phone) {
-      mobileNumber = profileData.phone
-      console.log('📱 Found mobile number from profileData.phone:', mobileNumber)
-    }
-    
-    // Source 3: Check localStorage for currentTokens (from auto-login)
+    // Source 4: Check localStorage for currentTokens (from auto-login)
     if (!mobileNumber) {
       const currentTokens = localStorage.getItem('currentTokens')
       if (currentTokens) {
@@ -77,7 +79,7 @@ const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
       }
     }
     
-    // Source 3: Fast search by hall ticket (most efficient)
+    // Source 5: Fast search by hall ticket (most efficient)
     if (!mobileNumber && profileData.htno) {
       console.log('🔍 Fast search by hall ticket:', profileData.htno)
       try {
@@ -97,7 +99,7 @@ const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
       }
     }
     
-    // Source 4: Fast search by name (if hall ticket search failed)
+    // Source 6: Fast search by name (if hall ticket search failed)
     if (!mobileNumber && profileData.name) {
       console.log('🔍 Fast search by name:', profileData.name)
       try {
@@ -117,9 +119,9 @@ const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
       }
     }
     
-    // Source 5: Check if this student already has a profile by looking for exact matches
+    // Source 7: Check if this student already has a profile by looking for exact matches
     if (!mobileNumber) {
-      console.log('🔍 Source 5: Checking for existing student profile...')
+      console.log('🔍 Source 7: Checking for existing student profile...')
       try {
         // Get all profiles and look for exact matches
         const { data: allProfiles, error: profilesError } = await supabase
@@ -252,6 +254,28 @@ const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
         console.error('❌ Error creating new profile:', error)
         toast.error('Failed to create profile')
         return
+      }
+    }
+    
+    // CRITICAL SAFETY CHECK: Verify we're updating the right person's profile
+    if (mobileNumber) {
+      console.log('🔒 CRITICAL SAFETY CHECK: Verifying mobile number match...')
+      
+      // Get the actual mobile number from the API response
+      const apiMobileNumber = fullPayload?.student?.phone
+      if (apiMobileNumber && apiMobileNumber !== mobileNumber) {
+        console.error('🚨 SECURITY ALERT: Mobile number mismatch detected!')
+        console.error('🚨 API returned mobile number:', apiMobileNumber)
+        console.error('🚨 We were about to update profile for:', mobileNumber)
+        console.error('🚨 This could overwrite the wrong person\'s data!')
+        
+        // Use the API mobile number instead
+        mobileNumber = apiMobileNumber
+        console.log('✅ Corrected mobile number to API response:', mobileNumber)
+      } else if (apiMobileNumber) {
+        console.log('✅ Mobile number verification passed - using API response')
+      } else {
+        console.log('⚠️ No API mobile number available for verification')
       }
     }
     
