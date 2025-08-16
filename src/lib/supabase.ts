@@ -34,11 +34,17 @@ export interface StudentProfile {
 export const supabaseDB = {
   // Check if credentials already exist
   async checkCredentialsExist(mobileNumber: string): Promise<{ data: any; error: any }> {
-    return await supabase
+    const { data, error } = await supabase
       .from('student_credentials')
       .select('mobile_number')
       .eq('mobile_number', mobileNumber)
-      .single()
+    
+    // Check if we got any results
+    if (data && data.length > 0) {
+      return { data: data[0], error: null }
+    } else {
+      return { data: null, error: { code: 'PGRST116', message: 'No rows returned' } }
+    }
   },
 
   // Insert student credentials (with duplicate handling)
@@ -73,20 +79,19 @@ export const supabaseDB = {
   // Insert student profile (with duplicate handling)
   async insertProfile(profileData: Omit<StudentProfile, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: any; error: any }> {
     // First check if profile already exists
-    const { data: existingProfile, error: checkError } = await supabase
+    const { data: existingProfiles, error: checkError } = await supabase
       .from('student_profiles')
       .select('*')
       .eq('mobile_number', profileData.mobile_number)
-      .single()
     
-    if (checkError && checkError.code !== 'PGRST116') {
-      // PGRST116 means no rows returned, which is expected for new users
+    if (checkError) {
       console.error('Error checking existing profile:', checkError)
       return { data: null, error: checkError }
     }
     
-    if (existingProfile) {
+    if (existingProfiles && existingProfiles.length > 0) {
       // Profile already exists, update it instead of inserting
+      const existingProfile = existingProfiles[0]
       console.log('Profile already exists for mobile number:', profileData.mobile_number, '- updating instead')
       return await supabase
         .from('student_profiles')
@@ -152,20 +157,30 @@ export const supabaseDB = {
 
   // Get credentials by mobile number
   async getCredentials(mobileNumber: string): Promise<{ data: any; error: any }> {
-    return await supabase
+    const { data, error } = await supabase
       .from('student_credentials')
       .select('*')
       .eq('mobile_number', mobileNumber)
-      .single()
+    
+    if (data && data.length > 0) {
+      return { data: data[0], error: null }
+    } else {
+      return { data: null, error: { code: 'PGRST116', message: 'No rows returned' } }
+    }
   },
 
   // Get profile by mobile number
   async getProfile(mobileNumber: string): Promise<{ data: any; error: any }> {
-    return await supabase
+    const { data, error } = await supabase
       .from('student_profiles')
       .select('*')
       .eq('mobile_number', mobileNumber)
-      .single()
+    
+    if (data && data.length > 0) {
+      return { data: data[0], error: null }
+    } else {
+      return { data: null, error: { code: 'PGRST116', message: 'No rows returned' } }
+    }
   },
 
   // Find profile by any identifier (mobile, hall ticket, or name)
@@ -199,19 +214,22 @@ export const supabaseDB = {
   // Get student profile by login phone number
   async getProfileByLoginPhone(loginPhoneNumber: string): Promise<{ data: any; error: any }> {
     // First get the mapping
-    const { data: mapping, error: mappingError } = await supabase
+    const { data: mappings, error: mappingError } = await supabase
       .from('login_mappings')
       .select('student_mobile_number')
       .eq('login_phone_number', loginPhoneNumber)
-      .single()
     
-    if (mappingError || !mapping) {
+    if (mappingError) {
+      return { data: null, error: mappingError }
+    }
+    
+    if (mappings && mappings.length > 0) {
+      // Then get the profile using the student's mobile number
+      return await this.getProfile(mappings[0].student_mobile_number)
+    } else {
       // If no mapping exists, try to get profile directly (for backward compatibility)
       return await this.getProfile(loginPhoneNumber)
     }
-    
-    // Then get the profile using the student's mobile number
-    return await this.getProfile(mapping.student_mobile_number)
   },
 
   // Get student profile by login phone number (with fallback)
