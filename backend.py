@@ -942,29 +942,42 @@ def get_timetable():
         print(f"Unexpected error: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/student-profile/<int:student_id>', methods=['GET'])
-def get_student_profile(student_id):
-    """Get student profile by ID"""
+@app.route('/student-profile/<student_id>', methods=['GET'])
+def get_student_profile_direct(student_id):  # Different function name
     try:
-        print(f"Fetching student profile for ID: {student_id}")
+        # Get authorization header from frontend
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({"success": False, "error": "No authorization token"}), 401
         
-        # For now, return a mock response
-        # You can implement actual database lookup later
-        return jsonify({
-            "success": True,
-            "message": "Student profile fetched successfully",
-            "data": {
-                "student_id": student_id,
-                "name": "Sample Student",
-                "hall_ticket": "23BD1A664Z",
-                "branch": "Computer Science",
-                "status": "active"
-            }
-        })
+        headers = {
+            'Authorization': auth_header,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
+        }
         
+        response = requests.get(
+            f"{KMIT_API_BASE}/studentmaster/studentprofile/{student_id}",
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            return jsonify({
+                "success": True,
+                "data": response.json()
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": f"Failed to fetch profile: {response.status_code}"
+            }), 400
+            
     except Exception as e:
-        print(f"Error fetching student profile: {e}")
-        return jsonify({"error": "Failed to fetch student profile"}), 500
+        return jsonify({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }), 500
 
 if __name__ == '__main__':
     print("🚀 Starting KMIT Vichaar Backend...")
