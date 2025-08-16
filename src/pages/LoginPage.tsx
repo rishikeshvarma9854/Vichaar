@@ -1,11 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTheme } from '@/contexts/ThemeContext'
 import { GraduationCap, Moon, Sun, Search, User, Hash, Eye, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
-import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { supabaseDB } from '@/lib/supabase'
 import apiClient from '@/lib/api'
+
+// TypeScript declarations for hCaptcha (same as register page)
+declare global {
+  interface Window {
+    hcaptcha: {
+      render: (container: string | HTMLElement, options: any) => string
+      reset: () => void
+      getResponse: () => string
+      remove: (widgetId: string) => void
+      execute: () => void
+      ready?: (callback: () => void) => void
+    }
+  }
+}
 
 export default function LoginPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -13,10 +26,56 @@ export default function LoginPage() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [hasSearched, setHasSearched] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const [captchaRef, setCaptchaRef] = useState<HCaptcha | null>(null)
+  const [captchaRef, setCaptchaRef] = useState<any | null>(null)
+  const [hcaptchaLoaded, setHcaptchaLoaded] = useState(false)
+  const [hcaptchaError, setHcaptchaError] = useState(false)
+  const hasInitializedRef = useRef(false) // Track if we've ever initialized
   
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
+
+  const handleHcaptchaVerify = useCallback((token: string) => {
+    console.log('hCaptcha verified:', token)
+    setCaptchaToken(token)
+    toast.success('Security verification completed! ✅')
+  }, [])
+
+  const handleHcaptchaExpired = useCallback(() => {
+    console.log('hCaptcha expired')
+    setCaptchaToken('')
+    toast.error('Security verification expired. Please verify again.')
+  }, [])
+
+  const handleHcaptchaError = useCallback(() => {
+    console.log('hCaptcha error')
+    setCaptchaToken('')
+    toast.error('Security verification failed. Please try again.')
+  }, [])
+
+  // Simple hCaptcha initialization (same as register page)
+  useEffect(() => {
+    if (!window.hcaptcha || hasInitializedRef.current) return
+    
+    try {
+      console.log('Initializing hCaptcha...')
+      
+      const widgetId = window.hcaptcha.render('hcaptcha-container', {
+        sitekey: '67f82236-2c1a-49d6-a37e-7112fd52364e',
+        callback: handleHcaptchaVerify,
+        'expired-callback': handleHcaptchaExpired,
+        'error-callback': handleHcaptchaError,
+        theme: theme === 'dark' ? 'dark' : 'light'
+      })
+      
+      console.log('hCaptcha initialized with ID:', widgetId)
+      setHcaptchaLoaded(true)
+      hasInitializedRef.current = true
+      
+    } catch (error) {
+      console.error('Failed to initialize hCaptcha:', error)
+      setHcaptchaError(true)
+    }
+  }, [theme, handleHcaptchaVerify, handleHcaptchaExpired, handleHcaptchaError])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,9 +153,9 @@ export default function LoginPage() {
       toast.error('Search failed. Please try again.')
     } finally {
       setIsLoading(false)
-      // Reset captcha after search
-      if (captchaRef) {
-        captchaRef.resetCaptcha()
+      // Reset captcha after search (same as register page)
+      if (window.hcaptcha) {
+        window.hcaptcha.reset()
         setCaptchaToken(null)
       }
     }
@@ -274,15 +333,44 @@ export default function LoginPage() {
             </div>
 
             {/* hCaptcha */}
-            <div className="flex justify-center">
-              <HCaptcha
-                ref={setCaptchaRef}
-                sitekey="67f82236-2c1a-49d6-a37e-7112fd52364e"
-                onVerify={onCaptchaVerify}
-                onExpire={onCaptchaExpired}
-                onError={onCaptchaError}
-                theme={theme === 'dark' ? 'dark' : 'light'}
-              />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Security Verification
+              </label>
+              
+              {/* Simple hCaptcha container (same as register page) */}
+              <div 
+                id="hcaptcha-container"
+                className="flex justify-center min-h-[78px]"
+                style={{ minHeight: '78px' }}
+              >
+                {!hcaptchaLoaded && !hcaptchaError && (
+                  <div className="flex items-center justify-center p-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                    <span className="text-gray-600 dark:text-gray-300">Loading security verification...</span>
+                  </div>
+                )}
+                {hcaptchaError && (
+                  <div className="text-center p-4">
+                    <p className="text-red-600 dark:text-red-400 mb-3">
+                      Failed to load security verification
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {captchaToken && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-2 text-center">
+                  ✅ Security verification completed
+                </p>
+              )}
             </div>
 
             <button
