@@ -249,6 +249,12 @@ export default function LoginPage() {
   // Handle when a student result is clicked
   const handleStudentClick = async (student: any) => {
     try {
+      // Check if captcha is completed before allowing login
+      if (!captchaToken) {
+        toast.error('Please complete the security verification before logging in')
+        return
+      }
+      
       console.log('🎯 Student selected:', student)
       
       // Get credentials for this student
@@ -400,7 +406,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading || !captchaToken}
+              disabled={isLoading}
               className="btn-primary w-full text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -409,9 +415,16 @@ export default function LoginPage() {
                   Searching...
                 </div>
               ) : (
-                '🔍 Search Student'
+                'Search Student'
               )}
             </button>
+            
+            {/* Help text explaining the new flow */}
+            <div className="mt-3 text-center">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                🔍 Search without captcha • ✅ Solve captcha when clicking results
+              </p>
+            </div>
           </form>
 
           {/* Search Results */}
