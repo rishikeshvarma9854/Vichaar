@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTheme } from '@/contexts/ThemeContext'
-import { GraduationCap, Moon, Sun, Search, User, Hash, Eye, ArrowRight } from 'lucide-react'
+import { GraduationCap, Moon, Sun, Search, User, Hash, Eye, ArrowRight, Smartphone, Lock, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabaseDB } from '@/lib/supabase'
 import apiClient from '@/lib/api'
@@ -29,6 +29,8 @@ export default function LoginPage() {
   const [captchaRef, setCaptchaRef] = useState<any | null>(null)
   const [hcaptchaLoaded, setHcaptchaLoaded] = useState(false)
   const [hcaptchaError, setHcaptchaError] = useState(false)
+  const [searchStrategy, setSearchStrategy] = useState<string>('')
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const hasInitializedRef = useRef(false) // Track if we've ever initialized
   
   const { theme, toggleTheme } = useTheme()
@@ -50,6 +52,15 @@ export default function LoginPage() {
     console.log('hCaptcha error')
     setCaptchaToken('')
     toast.error('Security verification failed. Please try again.')
+  }, [])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current)
+      }
+    }
   }, [])
 
   // Simple hCaptcha initialization (same as register page)
@@ -80,85 +91,9 @@ export default function LoginPage() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!searchQuery.trim()) {
-      toast.error('Please enter a hall ticket number or name')
-      return
-    }
-
-    // Remove captcha requirement for search - only needed for login
-    // if (!captchaToken) {
-    //   toast.error('Please complete the security verification')
-    //   return
-    // }
-
-    setIsLoading(true)
-    
-    try {
-      console.log('🔍 Search Debug:')
-      console.log('Search query:', searchQuery.trim())
-      console.log('Captcha token:', captchaToken ? 'Present' : 'Not required for search')
-      
-      // Enhanced search: Try multiple search strategies
-      let searchResults = null
-      let searchError = null
-      
-      // Strategy 1: Try exact hall ticket match first (fastest)
-      if (/^[A-Z0-9]+$/.test(searchQuery.trim())) {
-        console.log('🔍 Fast search by exact hall ticket:', searchQuery.trim())
-        const result = await supabaseDB.searchByHallTicket(searchQuery.trim())
-        searchResults = result.data
-        searchError = result.error
-      }
-      
-      // Strategy 2: If no results, try partial name search
-      if ((!searchResults || searchResults.length === 0) && searchQuery.trim().length >= 2) {
-        console.log('🔍 Partial name search:', searchQuery.trim())
-        const result = await supabaseDB.searchByName(searchQuery.trim())
-        if (result.data && result.data.length > 0) {
-          searchResults = result.data
-          searchError = result.error
-        }
-      }
-      
-      // Strategy 3: If still no results, try broader search
-      if (!searchResults || searchResults.length === 0) {
-        console.log('🔍 Broad search:', searchQuery.trim())
-        const result = await supabaseDB.searchStudent(searchQuery.trim())
-        searchResults = result.data
-        searchError = result.error
-      }
-      
-      if (searchError) {
-        console.error('Database search error:', searchError)
-        toast.error('Search failed. Please try again.')
-        return
-      }
-
-      console.log('Search results:', searchResults)
-      console.log('Number of results:', searchResults?.length || 0)
-
-      if (searchResults && searchResults.length > 0) {
-        // Found student(s) - show results for selection
-        setSearchResults(searchResults)
-        setHasSearched(true)
-        toast.success(`Found ${searchResults.length} student(s)! Click on a result to login.`)
-        
-      } else {
-        setSearchResults([])
-        setHasSearched(true)
-        toast('No students found with that search term. Try a different name or hall ticket number.')
-      }
-    } catch (error: any) {
-      console.error('Search error:', error)
-      toast.error('Search failed. Please try again.')
-    } finally {
-      setIsLoading(false)
-      // Don't reset captcha after search since we need it for login
-      // if (window.hcaptcha) {
-      //   window.hcaptcha.reset()
-      //   setCaptchaToken(null)
-      // }
-    }
+    // Since we're using auto-search, just prevent form submission
+    // The search is already happening as user types
+    return
   }
 
   // Auto-login to KMIT API using stored credentials
@@ -278,14 +213,116 @@ export default function LoginPage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Convert input to uppercase
-    setSearchQuery(e.target.value.toUpperCase())
+    const value = e.target.value.toUpperCase()
+    setSearchQuery(value)
+    
+    // Auto-search as user types (with debouncing)
+    if (value.trim().length >= 2) {
+      // Clear previous timeout
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current)
+      }
+      
+      // Set new timeout for auto-search
+      searchTimeout.current = setTimeout(() => {
+        handleAutoSearch(value.trim())
+      }, 500) // 500ms delay to avoid too many API calls
+    } else {
+      // Clear results if input is too short
+      setSearchResults([])
+      setHasSearched(false)
+    }
   }
 
+  // Auto-search function (separate from form submit)
+  const handleAutoSearch = async (query: string) => {
+    if (!query.trim() || query.trim().length < 2) return
+    
+    setIsLoading(true)
+    
+    try {
+      console.log('🔍 Auto-search for:', query.trim())
+      
+      // Enhanced search: Try multiple search strategies
+      let searchResults = null
+      let searchError = null
+      
+      // Strategy 1: Try exact hall ticket match first (fastest)
+      if (/^[A-Z0-9]+$/.test(query.trim())) {
+        console.log('🔍 Fast search by exact hall ticket:', query.trim())
+        const result = await supabaseDB.searchByHallTicket(query.trim())
+        searchResults = result.data
+        searchError = result.error
+        if (searchResults && searchResults.length > 0) {
+          console.log('✅ Found exact hall ticket match')
+          setSearchStrategy('exact-hall-ticket')
+        }
+      }
+      
+      // Strategy 2: If no results, try partial hall ticket search
+      if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
+        console.log('🔍 Partial hall ticket search:', query.trim())
+        const result = await supabaseDB.searchByPartialHallTicket(query.trim())
+        if (result.data && result.data.length > 0) {
+          searchResults = result.data
+          searchError = result.error
+          console.log('✅ Found partial hall ticket matches')
+          setSearchStrategy('partial-hall-ticket')
+        }
+      }
+      
+      // Strategy 3: If still no results, try partial name search
+      if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
+        console.log('🔍 Partial name search:', query.trim())
+        const result = await supabaseDB.searchByName(query.trim())
+        if (result.data && result.data.length > 0) {
+          searchResults = result.data
+          searchError = result.error
+          console.log('✅ Found partial name matches')
+          setSearchStrategy('partial-name')
+        }
+      }
+      
+      // Strategy 4: If still no results, try broader search
+      if (!searchResults || searchResults.length === 0) {
+        console.log('🔍 Broad search:', query.trim())
+        const result = await supabaseDB.searchStudent(query.trim())
+        searchResults = result.data
+        searchError = result.error
+        console.log('✅ Found broad search matches')
+        setSearchStrategy('broad-search')
+      }
+      
+      if (searchError) {
+        console.error('Auto-search error:', searchError)
+        return
+      }
+      
+      console.log('Auto-search results:', searchResults)
+      
+      if (searchResults && searchResults.length > 0) {
+        setSearchResults(searchResults)
+        setHasSearched(true)
+      } else {
+        setSearchResults([])
+        setHasSearched(true)
+      }
+    } catch (error: any) {
+      console.error('Auto-search error:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Clear search and results
   const handleClearSearch = () => {
     setSearchQuery('')
     setSearchResults([])
     setHasSearched(false)
+    setSearchStrategy('')
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current)
+    }
   }
 
   // hCaptcha handlers
@@ -336,9 +373,9 @@ export default function LoginPage() {
             Search Student
           </h2>
           
-          <form onSubmit={handleSearch} className="space-y-6">
+          <form onSubmit={handleSearch} className="space-y-8">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 text-center">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 text-center">
                 Enter Hall Ticket Number or Student Name
               </label>
               <div className="relative">
@@ -349,8 +386,8 @@ export default function LoginPage() {
                   type="text"
                   value={searchQuery}
                   onChange={handleInputChange}
-                  placeholder="Enter hall ticket number or name"
-                  className="input-field pl-12 pr-4 text-center text-lg font-medium tracking-wider"
+                  placeholder="Start typing hall ticket or name..."
+                  className="input-field pl-12 pr-4 text-center text-lg font-medium tracking-wider h-14"
                   required
                   autoFocus
                 />
@@ -358,21 +395,41 @@ export default function LoginPage() {
                   <Search className="w-5 h-5" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-                All input is automatically converted to uppercase
+              
+              {/* Loading indicator for auto-search */}
+              {isLoading && (
+                <div className="flex items-center justify-center mt-4">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+                  <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">Searching...</span>
+                </div>
+              )}
+              
+              {/* Show when user is typing but not yet searching */}
+              {searchQuery.trim().length >= 2 && !isLoading && !hasSearched && (
+                <div className="flex items-center justify-center mt-4">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mr-3"></div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Type to search...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Captcha Note - Clear instruction */}
+            <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                🔒 Solve captcha below before clicking on search results to login
               </p>
             </div>
 
-            {/* hCaptcha */}
+            {/* hCaptcha - Now below the note */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Security Verification
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 text-center">
+                Security Verification (Required for Login)
               </label>
               
               {/* Simple hCaptcha container (same as register page) */}
               <div 
                 id="hcaptcha-container"
-                className="flex justify-center min-h-[78px]"
+                className="flex justify-center min-h-[78px] bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
                 style={{ minHeight: '78px' }}
               >
                 {!hcaptchaLoaded && !hcaptchaError && (
@@ -398,108 +455,116 @@ export default function LoginPage() {
               </div>
               
               {captchaToken && (
-                <p className="text-xs text-green-600 dark:text-green-400 mt-2 text-center">
-                  ✅ Security verification completed
-                </p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn-primary w-full text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                  Searching...
+                <div className="mt-3 text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                    ✅ Security verification completed - You can now click on search results to login
+                  </p>
                 </div>
-              ) : (
-                'Search Student'
               )}
-            </button>
-            
-            {/* Help text explaining the new flow */}
-            <div className="mt-3 text-center">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                🔍 Search without captcha • ✅ Solve captcha when clicking results
-              </p>
             </div>
           </form>
 
           {/* Search Results */}
-          {hasSearched && (
+          {hasSearched && searchResults.length > 0 && (
             <div className="mt-8">
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
-                Search Results
-              </h3>
+              {/* Results count */}
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
+                  Search Results
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Found <span className="font-semibold text-blue-600 dark:text-blue-400">{searchResults.length}</span> student{searchResults.length === 1 ? '' : 's'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  Click on a result to login (captcha required)
+                </p>
+                
+                {/* Search strategy indicator */}
+                {searchStrategy && (
+                  <div className="mt-3">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+                      {searchStrategy === 'exact-hall-ticket' && '🎯 Exact Hall Ticket Match'}
+                      {searchStrategy === 'partial-hall-ticket' && '🔍 Partial Hall Ticket Match'}
+                      {searchStrategy === 'partial-name' && '👤 Partial Name Match'}
+                      {searchStrategy === 'broad-search' && '🌐 Broad Search Match'}
+                    </span>
+                  </div>
+                )}
+              </div>
               
-              {searchResults.length > 0 ? (
-                <div className="space-y-3">
-                  {searchResults.map((student: any, index: number) => (
-                    <div
-                      key={student.id || index}
-                      onClick={() => handleStudentClick(student)}
-                      className="bg-gray-800 dark:bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200 border border-gray-600 dark:border-gray-500"
-                    >
-                      <div className="flex items-center space-x-4">
-                        {/* Icon */}
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
-                            <User className="w-6 h-6 text-white" />
-                          </div>
+              {/* Results grid */}
+              <div className="space-y-4">
+                {searchResults.map((student: any, index: number) => (
+                  <div
+                    key={student.id || index}
+                    onClick={() => handleStudentClick(student)}
+                    className="bg-white dark:bg-gray-800 rounded-xl p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600"
+                  >
+                    <div className="flex items-center space-x-6">
+                      {/* Profile Picture */}
+                      <div className="flex-shrink-0">
+                        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+                          {student.name ? student.name.charAt(0) : 'S'}
                         </div>
-                        
-                        {/* Student Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-lg font-bold text-white truncate">
-                            {student.hall_ticket || 'No Hall Ticket'}
-                          </div>
-                          <div className="text-sm text-gray-300">
-                            {student.name ? `Name: ${student.name}` : 'No Name'}
-                          </div>
-                          {student.branch && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              {student.branch}
-                            </div>
-                          )}
-                          {student.year && (
-                            <div className="text-xs text-gray-400">
-                              Current Year: {student.year}
-                            </div>
-                          )}
+                      </div>
+                      
+                      {/* Student Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800">
+                            {student.hall_ticket || 'N/A'}
+                          </span>
                         </div>
-                        
-                        {/* Click Indicator */}
-                        <div className="flex-shrink-0">
-                          <ArrowRight className="w-5 h-5 text-gray-400" />
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate mb-2">
+                          {student.name || 'Student Name'}
+                        </h3>
+                        <p className="text-base text-gray-700 dark:text-gray-300 truncate mb-2">
+                          {student.branch || 'Branch not specified'}
+                        </p>
+                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                          <span className="flex items-center">
+                            <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                            {student.year || 'Year not specified'}
+                          </span>
+                          <span className="flex items-center">
+                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                            {student.semester || 'Semester not specified'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Click indicator */}
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                          <ArrowRight className="w-6 h-6 text-white" />
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="text-gray-400 text-lg mb-2">No students found</div>
-                  <div className="text-gray-500 text-sm">
-                    Try searching with a different name or hall ticket number
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           )}
 
           {hasSearched && searchResults.length === 0 && (
-            <div className="mt-6 text-center">
-              <p className="text-gray-600 dark:text-gray-400">
-                No students found with that search term. Try a different name or hall ticket number.
-              </p>
-              <button
-                onClick={handleClearSearch}
-                className="btn-secondary mt-4"
-              >
-                Clear Search
-              </button>
+            <div className="mt-8 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700">
+                <div className="text-gray-400 dark:text-gray-500 mb-4">
+                  <Search className="w-16 h-16 mx-auto" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  No students found
+                </h3>
+                <p className="text-gray-500 dark:text-gray-500 mb-6">
+                  Try a different hall ticket number or name
+                </p>
+                <button
+                  onClick={handleClearSearch}
+                  className="btn-secondary px-6 py-2"
+                >
+                  Clear Search
+                </button>
+              </div>
             </div>
           )}
 

@@ -83,6 +83,15 @@ export const supabaseDB = {
       .limit(3)
   },
 
+  // Fast search by partial hall ticket (for partial matches)
+  async searchByPartialHallTicket(partialHallTicket: string): Promise<{ data: any; error: any }> {
+    return await supabase
+      .from('student_profiles')
+      .select('*')
+      .ilike('hall_ticket', `%${partialHallTicket.toUpperCase()}%`)
+      .limit(5)
+  },
+
   // Get credentials by mobile number
   async getCredentials(mobileNumber: string): Promise<{ data: any; error: any }> {
     return await supabase
