@@ -942,6 +942,29 @@ def get_timetable():
         print(f"Unexpected error: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/student-profile/<int:student_id>', methods=['GET'])
+def get_student_profile(student_id):
+    """Get student profile by ID"""
+    try:
+        print(f"Fetching student profile for ID: {student_id}")
+        
+        # For now, return a mock response
+        # You can implement actual database lookup later
+        return jsonify({
+            "success": True,
+            "message": "Student profile fetched successfully",
+            "data": {
+                "student_id": student_id,
+                "name": "Sample Student",
+                "hall_ticket": "23BD1A664Z",
+                "branch": "Computer Science",
+                "status": "active"
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error fetching student profile: {e}")
+        return jsonify({"error": "Failed to fetch student profile"}), 500
 
 if __name__ == '__main__':
     print("🚀 Starting KMIT Vichaar Backend...")
