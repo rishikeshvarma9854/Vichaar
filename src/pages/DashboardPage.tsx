@@ -4,7 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { 
   GraduationCap, Moon, Sun, User, Calendar, 
-  BarChart3, Clock, QrCode, RefreshCw, ArrowLeft, Zap, X, Check, ChevronDown
+  BarChart3, Clock, QrCode, ArrowLeft, Zap, X, Check, ChevronDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import apiClient from '@/lib/api'
@@ -24,285 +24,91 @@ const getOrdinalSuffix = (num: number): string => {
 
 // Helper function to update profile in database with complete information
 const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
-  console.log('🚀 ===== updateProfileInDatabase FUNCTION START =====')
-  console.log('🚀 updateProfileInDatabase function called!')
-  console.log('🚀 profileData received:', profileData)
-  console.log('🚀 fullPayload received:', fullPayload)
-  
   try {
+    console.log('🚀 ===== updateProfileInDatabase FUNCTION START =====')
+    console.log('🚀 updateProfileInDatabase function called!')
+    console.log('🚀 profileData received:', profileData)
+    console.log('🚀 fullPayload received:', fullPayload)
+    
     console.log('💾 Updating profile in database with complete information...')
     
-    // Try multiple sources to find the mobile number
+    // Extract the CORRECT mobile number from the KMIT API response
+    // This should be the student's actual mobile number, not the login number
     let mobileNumber = null
     
-    // Source 1: PRIORITY - Get mobile number from KMIT API response (most reliable)
+    // Priority 1: Use mobile number from KMIT API response (most reliable)
     if (fullPayload?.student?.phone) {
       mobileNumber = fullPayload.student.phone
       console.log('📱 PRIORITY: Found mobile number from KMIT API response:', mobileNumber)
-    }
-    
-    // Source 2: SECOND PRIORITY - Get mobile number from profileData
-    if (!mobileNumber && profileData.phone) {
+    } else if (fullPayload?.phone) {
+      mobileNumber = fullPayload.phone
+      console.log('📱 SECOND PRIORITY: Found mobile number from KMIT API phone:', mobileNumber)
+    } else if (profileData?.phone) {
       mobileNumber = profileData.phone
-      console.log('📱 SECOND PRIORITY: Found mobile number from profileData.phone:', mobileNumber)
-    }
-    
-    // Source 3: THIRD PRIORITY - Check localStorage for currentStudent (only if API didn't provide mobile)
-    if (!mobileNumber) {
+      console.log('📱 THIRD PRIORITY: Found mobile number from profileData.phone:', mobileNumber)
+    } else {
+      // Fallback: Use currentStudent from localStorage (for backward compatibility)
       const currentStudent = localStorage.getItem('currentStudent')
       if (currentStudent) {
         try {
-          const studentInfo = JSON.parse(currentStudent)
-          mobileNumber = studentInfo.mobile_number || studentInfo.hallTicket
-          console.log('📱 THIRD PRIORITY: Found mobile number from currentStudent:', mobileNumber)
+          const parsed = JSON.parse(currentStudent)
+          mobileNumber = parsed.mobile_number || parsed.phone
+          console.log('📱 Found mobile number from currentStudent fallback:', mobileNumber)
         } catch (e) {
-          console.log('⚠️ Failed to parse currentStudent from localStorage')
+          console.error('Failed to parse currentStudent:', e)
         }
-      }
-    }
-    
-    // Source 4: Check localStorage for currentTokens (from auto-login)
-    if (!mobileNumber) {
-      const currentTokens = localStorage.getItem('currentTokens')
-      if (currentTokens) {
-        try {
-          const tokens = JSON.parse(currentTokens)
-          // Extract student ID from tokens if available
-          const studentId = localStorage.getItem('kmit_student_id')
-          if (studentId) {
-            console.log('🆔 Found student ID from tokens:', studentId)
-            // We'll use this to search in the database
-          }
-        } catch (e) {
-          console.log('⚠️ Failed to parse currentTokens from localStorage')
-        }
-      }
-    }
-    
-    // Source 5: Fast search by hall ticket (most efficient)
-    if (!mobileNumber && profileData.htno) {
-      console.log('🔍 Fast search by hall ticket:', profileData.htno)
-      try {
-        const searchResult = await supabaseDB.searchByHallTicket(profileData.htno)
-        console.log('🔍 Hall ticket search result:', searchResult)
-        
-        if (searchResult.error) {
-          console.log('⚠️ Hall ticket search error:', searchResult.error)
-        } else if (searchResult.data && searchResult.data.length > 0) {
-          mobileNumber = searchResult.data[0].mobile_number
-          console.log('✅ Found mobile number by hall ticket:', mobileNumber)
-        } else {
-          console.log('⚠️ No hall ticket match found')
-        }
-      } catch (searchErr) {
-        console.log('⚠️ Hall ticket search failed:', searchErr)
-      }
-    }
-    
-    // Source 6: Fast search by name (if hall ticket search failed)
-    if (!mobileNumber && profileData.name) {
-      console.log('🔍 Fast search by name:', profileData.name)
-      try {
-        const searchResult = await supabaseDB.searchByName(profileData.name)
-        console.log('🔍 Name search result:', searchResult)
-        
-        if (searchResult.error) {
-          console.log('⚠️ Name search error:', searchResult.error)
-        } else if (searchResult.data && searchResult.data.length > 0) {
-          mobileNumber = searchResult.data[0].mobile_number
-          console.log('✅ Found mobile number by name:', mobileNumber)
-        } else {
-          console.log('⚠️ No name match found')
-        }
-      } catch (searchErr) {
-        console.log('⚠️ Name search failed:', searchErr)
-      }
-    }
-    
-    // Source 7: Check if this student already has a profile by looking for exact matches
-    if (!mobileNumber) {
-      console.log('🔍 Source 7: Checking for existing student profile...')
-      try {
-        // Get all profiles and look for exact matches
-        const { data: allProfiles, error: profilesError } = await supabase
-          .from('student_profiles')
-          .select('*')
-        
-        if (profilesError) {
-          console.log('⚠️ Error fetching all profiles:', profilesError)
-        } else if (allProfiles && allProfiles.length > 0) {
-          console.log('🔍 All profiles found:', allProfiles)
-          
-          // Look for a profile that EXACTLY matches this student
-          const exactMatch = allProfiles.find(profile => {
-            // Check if this profile belongs to the current student
-            // We need to be very careful here to avoid overwriting wrong profiles
-            
-            // If profile has hall_ticket and it matches, it's the right one
-            if (profile.hall_ticket && profile.hall_ticket === profileData.htno) {
-              return true
-            }
-            
-            // If profile has name and it matches, it's the right one
-            if (profile.name && profile.name === profileData.name) {
-              return true
-            }
-            
-            // If profile has mobile number that matches current student's mobile (from localStorage)
-            const currentStudent = localStorage.getItem('currentStudent')
-            if (currentStudent) {
-              try {
-                const parsedStudent = JSON.parse(currentStudent)
-                if (parsedStudent.mobile_number && profile.mobile_number === parsedStudent.mobile_number) {
-                  return true
-                }
-              } catch (e) {
-                console.log('⚠️ Failed to parse currentStudent from localStorage')
-              }
-            }
-            
-            return false
-          })
-          
-          if (exactMatch) {
-            mobileNumber = exactMatch.mobile_number
-            console.log('✅ Found exact matching profile:', exactMatch)
-            console.log('📱 Using mobile number:', mobileNumber)
-          } else {
-            console.log('⚠️ No exact matching profile found - this student needs a new profile')
-            console.log('🔍 Current student data:', {
-              htno: profileData.htno,
-              name: profileData.name,
-              currentStudent: localStorage.getItem('currentStudent')
-            })
-          }
-        } else {
-          console.log('⚠️ No profiles found in database')
-        }
-      } catch (searchErr) {
-        console.log('⚠️ Failed to search all profiles:', searchErr)
       }
     }
     
     if (!mobileNumber) {
-      console.log('❌ Could not find mobile number from any source')
-      console.log('🔍 Available data:', {
-        currentStudent: localStorage.getItem('currentStudent'),
-        currentTokens: localStorage.getItem('currentTokens'),
-        kmitStudentId: localStorage.getItem('kmit_student_id'),
-        profileData: profileData
-      })
+      console.error('❌ No mobile number found for profile update!')
+      return
+    }
+    
+    console.log('📱 Using mobile number for profile update:', mobileNumber)
+    
+    // DEBUG: Check if profile already exists
+    console.log('🔍 Checking if profile already exists for mobile number:', mobileNumber)
+    const existingProfile = await supabaseDB.getProfile(mobileNumber)
+    console.log('🔍 Existing profile check result:', existingProfile)
+    
+    // DEBUG: Check if credentials exist
+    console.log('🔍 Checking if credentials exist for mobile number:', mobileNumber)
+    const existingCredentials = await supabaseDB.getCredentials(mobileNumber)
+    console.log('🔍 Existing credentials check result:', existingCredentials)
+    
+    // CRITICAL: Ensure credentials exist first (required for foreign key constraint)
+    if (!existingCredentials.data) {
+      console.log('🔐 No credentials found for mobile number, creating dummy credentials...')
+      // Create dummy credentials to satisfy foreign key constraint
+      // We'll use a placeholder password since we don't have the actual password here
+      const credentialsResult = await supabaseDB.insertCredentials(mobileNumber, 'placeholder_password')
+      console.log('🔐 Credentials creation result:', credentialsResult)
       
-      // Try to create a new profile for this student
-      console.log('🆕 Attempting to create new profile for this student...')
-      
-      try {
-        // Get the mobile number from currentStudent in localStorage
-        const currentStudent = localStorage.getItem('currentStudent')
-        if (currentStudent) {
-          try {
-            const parsedStudent = JSON.parse(currentStudent)
-            const newMobileNumber = parsedStudent.mobile_number
-            
-            if (newMobileNumber) {
-              console.log('📱 Creating new profile with mobile number:', newMobileNumber)
-              
-              // Create new profile data
-              const newProfileData = {
-                mobile_number: newMobileNumber,
-                hall_ticket: profileData.htno || '',
-                name: profileData.name || '',
-                branch: profileData.branch?.name || profileData.branch || '',
-                year: profileData.currentyear?.toString() || '',
-                semester: profileData.currentsemester?.toString() || '',
-                student_image: fullPayload?.studentimage || null,
-                qr_code: fullPayload?.qrcode || null,
-                profile_data: fullPayload
-              }
-              
-              console.log('📝 New profile data to insert:', newProfileData)
-              
-              // Insert the new profile
-              const { data: insertResult, error: insertError } = await supabase
-                .from('student_profiles')
-                .insert([newProfileData])
-                .select()
-              
-              if (insertError) {
-                console.error('❌ Failed to create new profile:', insertError)
-                toast.error('Failed to create profile in database')
-                return
-              } else {
-                console.log('✅ New profile created successfully:', insertResult)
-                toast.success('New profile created in database!')
-                return
-              }
-            } else {
-              console.log('⚠️ No mobile number found in currentStudent')
-            }
-          } catch (e) {
-            console.log('⚠️ Failed to parse currentStudent from localStorage:', e)
-          }
-        } else {
-          console.log('⚠️ No currentStudent found in localStorage')
-        }
-        
-        console.log('❌ Cannot create profile without mobile number, skipping database update')
-        return
-        
-      } catch (error) {
-        console.error('❌ Error creating new profile:', error)
-        toast.error('Failed to create profile')
+      if (credentialsResult.error) {
+        console.error('❌ Failed to create credentials:', credentialsResult.error)
         return
       }
+      console.log('✅ Credentials created successfully')
+    } else {
+      console.log('✅ Credentials already exist for mobile number:', mobileNumber)
     }
     
-    // CRITICAL SAFETY CHECK: Verify we're updating the right person's profile
-    if (mobileNumber) {
-      console.log('🔒 CRITICAL SAFETY CHECK: Verifying mobile number match...')
-      
-      // Get the actual mobile number from the API response
-      const apiMobileNumber = fullPayload?.student?.phone
-      if (apiMobileNumber && apiMobileNumber !== mobileNumber) {
-        console.error('🚨 SECURITY ALERT: Mobile number mismatch detected!')
-        console.error('🚨 API returned mobile number:', apiMobileNumber)
-        console.error('🚨 We were about to update profile for:', mobileNumber)
-        console.error('🚨 This could overwrite the wrong person\'s data!')
-        
-        // Use the API mobile number instead
-        mobileNumber = apiMobileNumber
-        console.log('✅ Corrected mobile number to API response:', mobileNumber)
-      } else if (apiMobileNumber) {
-        console.log('✅ Mobile number verification passed - using API response')
-      } else {
-        console.log('⚠️ No API mobile number available for verification')
-      }
-    }
-    
-    // Prepare complete profile data - correctly map KMIT API fields to database fields
+    // Create complete profile data
     const completeProfileData = {
-      hall_ticket: profileData.htno || '', // KMIT API: profile.payload.student.htno
-      name: profileData.name || '', // KMIT API: profile.payload.student.name
-      branch: profileData.branch?.name || '', // KMIT API: profile.payload.student.branch.name
-      year: profileData.currentyear?.toString() || '', // KMIT API: profile.payload.student.currentyear
-      semester: profileData.currentsemester?.toString() || '', // KMIT API: profile.payload.student.currentsemester
-      student_image: fullPayload?.studentimage || null, // KMIT API: profile.payload.studentimage
-      qr_code: fullPayload?.qrcode || null, // KMIT API: profile.payload.qrcode
-      profile_data: fullPayload // Store the complete KMIT API response
+      mobile_number: mobileNumber, // Add mobile_number to the profile data
+      hall_ticket: profileData.htno || '',
+      name: profileData.name || '',
+      branch: profileData.branch?.name || '',
+      year: profileData.currentyear?.toString() || '',
+      semester: profileData.currentsemester?.toString() || '',
+      student_image: fullPayload.studentimage || null,
+      qr_code: fullPayload.qrcode || null,
+      profile_data: fullPayload
     }
     
     console.log('📝 Complete profile data to update:', completeProfileData)
     console.log('📱 Updating profile for mobile number:', mobileNumber)
-    
-    // Debug: Show the exact data mapping
-    console.log('🔍 Data mapping verification:')
-    console.log('  - Hall Ticket (htno):', profileData.htno)
-    console.log('  - Name:', profileData.name)
-    console.log('  - Branch:', profileData.branch?.name)
-    console.log('  - Year:', profileData.currentyear)
-    console.log('  - Semester:', profileData.currentsemester)
-    console.log('  - Student Image:', fullPayload?.studentimage ? 'Present' : 'Missing')
-    console.log('  - QR Code:', fullPayload?.qrcode ? 'Present' : 'Missing')
     
     // Update the profile in database
     console.log('🔍 Calling supabaseDB.updateProfile with:', { mobileNumber, completeProfileData })
@@ -342,8 +148,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   const [showAttendanceDetails, setShowAttendanceDetails] = useState(false)
-  const [attendanceDetails, setAttendanceDetails] = useState<any>(null)
-  const [subjectAttendance, setSubjectAttendance] = useState<any>(null)
+  const [attendanceDetails] = useState<any>(null)
+  const [subjectAttendance] = useState<any>(null)
   
   const [showResultsDetails, setShowResultsDetails] = useState(false)
   const [activeResultsTab, setActiveResultsTab] = useState<'internal' | 'semester'>('internal')
@@ -360,6 +166,156 @@ export default function DashboardPage() {
     console.log('🔄 internalResults:', internalResults)
     console.log('🔄 semesterResults:', semesterResults)
   }, [internalResults, semesterResults])
+
+  // Debug: Monitor attendanceDetails state changes
+  useEffect(() => {
+    console.log('🔄 attendanceDetails state changed to:', attendanceDetails)
+    if (attendanceDetails?.payload?.attendanceDetails?.[0]) {
+      console.log('🔄 First entry data in attendanceDetails:', attendanceDetails.payload.attendanceDetails[0])
+      console.log('🔄 First entry periods:', attendanceDetails.payload.attendanceDetails[0].periods)
+    }
+    
+    // Find the actual "Today" entry
+    const todayEntry = attendanceDetails?.payload?.attendanceDetails?.find((day: any) => day.date === "Today")
+    if (todayEntry) {
+      console.log('🔄 ACTUAL Today entry found:', todayEntry)
+      console.log('🔄 ACTUAL Today periods:', todayEntry.periods)
+      console.log('🔄 ACTUAL Today period statuses:', todayEntry.periods?.map((p: any) => ({ period: p.period_no, status: p.status })))
+    }
+  }, [attendanceDetails])
+
+  // Debug: Monitor all state changes
+  useEffect(() => {
+    console.log('🔄 ALL STATE CHANGES:')
+    console.log('🔄 studentData:', studentData)
+    console.log('🔄 attendanceDetails:', attendanceDetails)
+    console.log('🔄 subjectAttendance:', subjectAttendance)
+    console.log('🔄 isLoading:', isLoading)
+  }, [studentData, attendanceDetails, subjectAttendance, isLoading])
+
+  // Debug: Check database state
+  const checkDatabaseState = async () => {
+    try {
+      console.log('🧪 Testing database connection...')
+      
+      // Test search to see if we can connect
+      const searchTest = await supabaseDB.searchStudent('test')
+      console.log('🧪 Search test result:', searchTest)
+      
+      // Get all profiles
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from('student_profiles')
+        .select('*')
+      console.log('🧪 All profiles in database:', allProfiles)
+      console.log('🧪 Profiles error:', profilesError)
+      
+      // Get all credentials
+      const { data: allCredentials, error: credentialsError } = await supabase
+        .from('student_credentials')
+        .select('*')
+      console.log('🧪 All credentials in database:', allCredentials)
+      console.log('🧪 Credentials error:', credentialsError)
+      
+      if (!profilesError && !credentialsError) {
+        console.log('✅ Database connection successful')
+        console.log('📊 Found', allProfiles?.length || 0, 'profiles and', allCredentials?.length || 0, 'credentials')
+      } else {
+        console.error('❌ Database connection failed:', { profilesError, credentialsError })
+      }
+    } catch (error) {
+      console.error('❌ Error checking database state:', error)
+    }
+  }
+
+  // Manual test function for debugging
+  const testDatabaseOperations = async () => {
+    try {
+      console.log('🧪 ===== MANUAL DATABASE TEST START =====')
+      
+      const testMobileNumber = '9177511236'
+      console.log('🧪 Testing with mobile number:', testMobileNumber)
+      
+      // Test 1: Check credentials
+      console.log('🧪 Test 1: Checking credentials...')
+      const credsCheck = await supabaseDB.getCredentials(testMobileNumber)
+      console.log('🧪 Credentials check result:', credsCheck)
+      
+      // Test 2: Check profile
+      console.log('🧪 Test 2: Checking profile...')
+      const profileCheck = await supabaseDB.getProfile(testMobileNumber)
+      console.log('🧪 Profile check result:', profileCheck)
+      
+      // Test 3: Try to insert credentials if they don't exist
+      if (!credsCheck.data) {
+        console.log('🧪 Test 3: Inserting test credentials...')
+        const credsInsert = await supabaseDB.insertCredentials(testMobileNumber, 'test_password')
+        console.log('🧪 Credentials insert result:', credsInsert)
+      }
+      
+      // Test 4: Try to insert a test profile
+      console.log('🧪 Test 4: Inserting test profile...')
+      const testProfileData = {
+        mobile_number: testMobileNumber,
+        hall_ticket: 'TEST123',
+        name: 'Test Student',
+        branch: 'Test Branch',
+        year: '1',
+        semester: '1',
+        student_image: undefined,
+        qr_code: undefined,
+        profile_data: { test: true }
+      }
+      
+      const profileInsert = await supabaseDB.insertProfile(testProfileData)
+      console.log('🧪 Profile insert result:', profileInsert)
+      
+      // Test 5: Check final state
+      console.log('🧪 Test 5: Checking final state...')
+      await checkDatabaseState()
+      
+      console.log('🧪 ===== MANUAL DATABASE TEST END =====')
+      
+    } catch (error) {
+      console.error('❌ Manual database test failed:', error)
+    }
+  }
+
+  // Test the exact profile data that's failing
+  const testExactProfileData = async () => {
+    try {
+      console.log('🧪 ===== TESTING EXACT PROFILE DATA =====')
+      
+      const testMobileNumber = '9177511236'
+      console.log('🧪 Testing with mobile number:', testMobileNumber)
+      
+      // Create the exact profile data structure that's failing
+      const exactProfileData = {
+        mobile_number: testMobileNumber,
+        hall_ticket: '23BD1A665W',
+        name: 'YERUBANDI SAI VINEEL',
+        branch: 'COMPUTER SCIENCE AND ENGINEERING (AIML)',
+        year: '3',
+        semester: '1',
+        student_image: 'data:image/jpg;base64,/9j/4QBYRXhpZgAASUkqAAgAAAAE...',
+        qr_code: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQA...',
+        profile_data: { test: 'exact_data' }
+      }
+      
+      console.log('🧪 Exact profile data to test:', exactProfileData)
+      
+      // Try to insert this exact data
+      const result = await supabaseDB.insertProfile(exactProfileData)
+      console.log('🧪 Insert result for exact data:', result)
+      
+      // Check final state
+      await checkDatabaseState()
+      
+      console.log('🧪 ===== EXACT PROFILE DATA TEST END =====')
+      
+    } catch (error) {
+      console.error('❌ Exact profile data test failed:', error)
+    }
+  }
 
   // Handle attendance button click
   const handleAttendanceClick = async () => {
@@ -537,7 +493,7 @@ export default function DashboardPage() {
         
         // Find current day and expand it by default
         const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
-        const currentDayIndex = timetableResponse.data.payload.findIndex((day: any) => 
+        const currentDayIndex: number = timetableResponse.data.payload.findIndex((day: any) =>
           day.dayname === currentDay
         )
         
@@ -554,352 +510,201 @@ export default function DashboardPage() {
     }
   }
 
+  // Check authentication and fetch data on mount
   useEffect(() => {
-    loadStudentData()
-    // Test database connection
-    testDatabaseConnection()
-  }, [])
-
-  // Test database connection and show all data
-  const testDatabaseConnection = async () => {
-    try {
-      console.log('🧪 Testing database connection...')
-      
-      // Test 1: Check if we can connect to Supabase
-      const searchResult = await supabaseDB.searchStudent('test')
-      console.log('🧪 Search test result:', searchResult)
-      
-      // Test 2: Get all profiles from database
-      const { data: allProfiles, error: profilesError } = await supabase
-        .from('student_profiles')
-        .select('*')
-      console.log('🧪 All profiles in database:', allProfiles)
-      console.log('🧪 Profiles error:', profilesError)
-      
-      // Test 3: Get all credentials from database
-      const { data: allCredentials, error: credsError } = await supabase
-        .from('student_credentials')
-        .select('*')
-      console.log('🧪 All credentials in database:', allCredentials)
-      console.log('🧪 Credentials error:', credsError)
-      
-      if (profilesError || credsError) {
-        console.error('❌ Database connection failed:', { profilesError, credsError })
-        toast.error('Database connection failed. Check your Supabase configuration.')
-      } else {
-        console.log('✅ Database connection successful')
-        console.log(`📊 Found ${allProfiles?.length || 0} profiles and ${allCredentials?.length || 0} credentials`)
-      }
-      
-    } catch (err) {
-      console.error('❌ Database test error:', err)
-    }
-  }
-
-  // Debug: Monitor attendanceDetails state changes
-  useEffect(() => {
-    console.log('🔄 attendanceDetails state changed to:', attendanceDetails)
-    if (attendanceDetails?.payload?.attendanceDetails?.[0]) {
-      console.log('🔄 First entry data in attendanceDetails:', attendanceDetails.payload.attendanceDetails[0])
-      console.log('🔄 First entry periods:', attendanceDetails.payload.attendanceDetails[0].periods)
-    }
-    
-    // Find the actual "Today" entry
-    const todayEntry = attendanceDetails?.payload?.attendanceDetails?.find((day: any) => day.date === "Today")
-    if (todayEntry) {
-      console.log('🔄 ACTUAL Today entry found:', todayEntry)
-      console.log('🔄 ACTUAL Today periods:', todayEntry.periods)
-      console.log('🔄 ACTUAL Today period statuses:', todayEntry.periods?.map((p: any) => ({ period: p.period_no, status: p.status })))
-    }
-  }, [attendanceDetails])
-
-  // Debug: Monitor all state changes
-  useEffect(() => {
-    console.log('🔄 ALL STATE CHANGES:')
-    console.log('🔄 studentData:', studentData)
-    console.log('🔄 attendanceDetails:', attendanceDetails)
-    console.log('🔄 subjectAttendance:', subjectAttendance)
-    console.log('🔄 isLoading:', isLoading)
-  }, [studentData, attendanceDetails, subjectAttendance, isLoading])
-
-  const loadStudentData = async () => {
-    try {
-      setIsLoading(true)
-      
-      // Add a small delay to ensure tokens are properly saved
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Debug: Check token state
+    const checkAuthAndFetchData = async () => {
       console.log('Checking authentication...')
-      console.log('Is authenticated:', apiClient.isAuthenticated())
-      console.log('Current token:', apiClient.getCurrentToken())
       
-      // Check if user is authenticated first
-      if (!apiClient.isAuthenticated()) {
-        console.log('User not authenticated, redirecting to login...')
-        navigate('/register')
-        return
-      }
+      // Always check database state first to see what's in there
+      await checkDatabaseState()
       
-      console.log('User authenticated, fetching profile...')
-      
-      // Try to get real student profile from KMIT API
-      try {
-        console.log('🔄 Starting to fetch student profile...')
-        const profile = await apiClient.getStudentProfile()
-        console.log('✅ Student profile API response received:', profile)
+      if (isAuthenticated) {
+        console.log('Is authenticated:', isAuthenticated)
+        const currentToken = localStorage.getItem('kmit_access_token')
+        console.log('Current token:', currentToken)
         
-        if (!profile) {
-          throw new Error('No profile response received from API')
-        }
-        
-        console.log('📋 Profile response structure:', {
-          hasSuccess: !!profile.success,
-          hasData: !!profile.payload,
-          hasPayload: !!profile.payload,
-          hasStudent: !!profile.payload?.student,
-          studentImageField: profile.payload?.studentimage
-        })
-        
-        // Debug: Log the exact structure
-        console.log('🔍 Full profile object:', JSON.stringify(profile, null, 2))
-        console.log('🔍 profile.payload:', profile.payload)
-        console.log('🔍 profile.payload?.student:', profile.payload?.student)
-        console.log('🔍 profile.payload?.studentimage:', profile.payload?.studentimage)
-        
-        // Extract real data from KMIT response - CORRECT PATH
-        const profileData = profile.payload?.student
-        
-        if (!profileData) {
-          console.error('❌ No student data found in profile response')
-          console.error('❌ Profile structure:', profile)
-          console.error('❌ profile.payload:', profile.payload)
-          console.error('❌ profile.payload?.student:', profile.payload?.student)
-          throw new Error('No student data found in KMIT response')
-        }
-        
-        console.log('✅ Profile data extracted successfully:', profileData)
-        console.log('🔍 Raw studentimage field:', profileData.studentimage)
-        console.log('🔍 studentimage type:', typeof profileData.studentimage)
-        console.log('🔍 studentimage length:', profileData.studentimage?.length)
-        console.log('🔍 All profileData keys:', Object.keys(profileData))
-        
-        // Convert KMIT student data to our format
-        const studentData: StudentData = {
-          name: profileData.name || 'Student Name',
-          hallTicket: profileData.htno || 'Hall Ticket',
-          branch: profileData.branch?.name || 'Computer Science & Engineering',
-          year: `${profileData.currentyear || 1}${getOrdinalSuffix(profileData.currentyear || 1)} Year`,
-          semester: `${profileData.currentsemester || 1}${getOrdinalSuffix(profileData.currentsemester || 1)} Semester`,
-          studentImage: profile.payload?.studentimage,
-          qrCode: profile.payload?.qrcode,
-          attendance: {
-            overall: 0,
-            present: 0,
-            absent: 0,
-            noSessions: 0,
-            sessions: []
-          },
-          results: {
-            cgpa: 8.65
-          }
-        }
-        
-        console.log('✅ Student data converted successfully:', studentData)
-        console.log('📸 Student image data:', profileData.studentimage)
-        setStudentData(studentData)
-        
-        // Store student image if available
-        if (studentData.studentImage) {
-          console.log('📸 Student image available:', studentData.studentImage.substring(0, 50) + '...')
-        } else {
-          console.log('⚠️ No student image available in profile data')
-        }
-
-        console.log('🔄 ===== PROFILE UPDATE SECTION START =====')
-        console.log('🔄 About to call updateProfileInDatabase...')
-        console.log('🔄 profileData:', profileData)
-        console.log('🔄 profile.payload:', profile.payload)
-        console.log('🔄 Function exists?', typeof updateProfileInDatabase)
-        
-        // Update the profile in database with complete information
-        // Pass the correct data structure: profileData (student info) + profile.payload (full response)
-        try {
-          console.log('🔄 Calling updateProfileInDatabase now...')
-          await updateProfileInDatabase(profileData, profile.payload)
-          console.log('✅ updateProfileInDatabase completed successfully')
-        } catch (error) {
-          console.error('❌ updateProfileInDatabase failed:', error)
-        }
-        
-        console.log('🔄 ===== PROFILE UPDATE SECTION END =====')
-        
-      } catch (profileError: any) {
-        console.error('❌ Failed to load student profile:', profileError)
-        console.error('❌ Profile error details:', {
-          message: profileError.message,
-          stack: profileError.stack
-        })
-        throw profileError
-      }
-      
-      // Fetch notices count
-      try {
-        console.log('📢 Fetching notices count...')
-        const noticesResponse = await apiClient.getNoticesCount()
-        console.log('📢 Notices count response:', noticesResponse)
-      } catch (noticesError) {
-        console.error('❌ Failed to fetch notices count:', noticesError)
-      }
-      
-      // Now fetch real attendance data from KMIT
-      try {
-        console.log('🔄 Fetching REAL attendance data from KMIT...')
-        const attendanceResponse = await apiClient.getAttendance()
-        console.log('📊 FULL KMIT attendance response:', attendanceResponse)
-        
-        if (attendanceResponse.success && attendanceResponse.data?.payload) {
-          const kmitData = attendanceResponse.data.payload
-          console.log('✅ KMIT payload data:', kmitData)
-          console.log('✅ KMIT attendanceDetails:', kmitData.attendanceDetails)
-          
-          // Convert KMIT attendance format to our format
-          const realAttendance = {
-            overall: parseFloat(kmitData.overallAttendance) || 0,
-            present: 0,
-            absent: 0,
-            noSessions: 0,
-            sessions: kmitData.attendanceDetails || []
-          }
-          
-          // Calculate present/absent from TODAY'S attendance only
-          if (kmitData.attendanceDetails && kmitData.attendanceDetails.length > 0) {
-            const todayData = kmitData.attendanceDetails.find((day: any) => day.date === "Today") // Find actual "Today" entry
-            console.log('📅 Today data:', todayData)
+        if (currentToken) {
+          console.log('User authenticated, fetching profile...')
+          try {
+            // Fetch student profile
+            console.log('🔄 Starting to fetch student profile...')
+            const profile = await apiClient.getStudentProfile()
+            console.log('✅ Student profile API response received:', profile)
             
-            if (todayData && todayData.periods) {
-              console.log('📅 Today\'s attendance data:', todayData)
-              console.log('📚 Today\'s periods:', todayData.periods)
-              
-              // Count present/absent for today
-              realAttendance.present = todayData.periods.filter((period: any) => 
-                period.status === 1
-              ).length
-              realAttendance.absent = todayData.periods.filter((period: any) => 
-                period.status === 0
-              ).length
-              realAttendance.noSessions = todayData.periods.filter((period: any) => 
-                period.status === 2
-              ).length
-              
-              console.log('📊 Today\'s counts:', {
-                present: realAttendance.present,
-                absent: realAttendance.absent,
-                noSessions: realAttendance.noSessions
+            if (profile && profile.payload) {
+              console.log('📋 Profile response structure:', {
+                hasSuccess: profile.success,
+                hasData: !!profile.data,
+                hasPayload: !!profile.payload,
+                hasStudent: !!profile.payload.student,
+                studentImageField: profile.payload.studentimage
               })
               
-              // Debug: Log all period statuses to understand the mapping
-              console.log('🔍 All period statuses:', todayData.periods.map((p: any) => ({ period: p.period_no, status: p.status })))
-            } else {
-              console.log('⚠️ No periods found in today\'s data')
-            }
-          } else {
-            console.log('⚠️ No attendanceDetails found')
-          }
-          
-          console.log('✅ Converted KMIT attendance:', realAttendance)
-          
-          // Store the full KMIT attendance data for the modal
-          setAttendanceDetails(attendanceResponse.data)
-          console.log('🔧 SETTING attendanceDetails state to:', attendanceResponse.data)
-          console.log('🔧 attendanceDetails[0] will be:', attendanceResponse.data?.payload?.attendanceDetails?.[0])
-          console.log('🔧 Today entry will be:', attendanceResponse.data?.payload?.attendanceDetails?.find((day: any) => day.date === "Today"))
-          
-          // Update student data with real attendance
-          setStudentData(prevData => {
-            if (prevData) {
-              return {
-                ...prevData,
-                attendance: realAttendance
+              console.log('🔍 Full profile object:', profile)
+              console.log('🔍 profile.payload:', profile.payload)
+              console.log('🔍 profile.payload?.student:', profile.payload?.student)
+              console.log('🔍 profile.payload?.studentimage:', profile.payload?.studentimage)
+              
+              if (profile.payload.student) {
+                console.log('✅ Profile data extracted successfully:', profile.payload.student)
+                
+                // Convert KMIT API data to our format
+                const studentData: StudentData = {
+                  name: profile.payload.student.name || 'N/A',
+                  hallTicket: profile.payload.student.htno || 'N/A',
+                  branch: profile.payload.student.branch?.name || 'N/A',
+                  year: profile.payload.student.currentyear ? `${profile.payload.student.currentyear}${getOrdinalSuffix(Number(profile.payload.student.currentyear))} Year` : 'N/A',
+                  semester: profile.payload.student.currentsemester ? `${profile.payload.student.currentsemester}${getOrdinalSuffix(Number(profile.payload.student.currentsemester))} Semester` : 'N/A',
+                  studentImage: profile.payload.studentimage || undefined,
+                  qrCode: profile.payload.qrcode || undefined,
+                  attendance: {
+                    overall: 0,
+                    present: 0,
+                    absent: 0,
+                    noSessions: 0,
+                    sessions: []
+                  },
+                  results: {
+                    cgpa: 0
+                  }
+                }
+                
+                console.log('✅ Student data converted successfully:', studentData)
+                console.log('📸 Student image data:', profile.payload.studentimage)
+                console.log('📸 Student image available:', profile.payload.studentimage ? profile.payload.studentimage.substring(0, 100) + '...' : 'Not available')
+                
+                setStudentData(studentData)
+                
+                // Update profile in database with complete information
+                console.log('🔄 ===== PROFILE UPDATE SECTION START =====')
+                console.log('🔄 About to call updateProfileInDatabase...')
+                console.log('🔄 profileData:', profile.payload.student)
+                console.log('🔄 profile.payload:', profile.payload)
+                console.log('🔄 Function exists?', typeof updateProfileInDatabase)
+                console.log('🔄 Calling updateProfileInDatabase now...')
+                
+                await updateProfileInDatabase(profile.payload.student, profile.payload)
+                
+                console.log('🔄 ===== PROFILE UPDATE SECTION END =====')
+                
+              } else {
+                console.error('❌ No student data in profile response')
               }
+            } else {
+              console.error('❌ Invalid profile response structure')
             }
-            return prevData
-          })
-          
-          console.log('🎯 Updated student data with REAL KMIT attendance')
-          
-          toast.success(`Loaded real attendance: ${realAttendance.overall}%`)
-        } else {
-          console.warn('❌ No attendance data in response')
-        }
-        
-        // Fetch subject attendance data
-        try {
-          console.log('📚 Fetching subject attendance data...')
-          const subjectResponse = await apiClient.getSubjectAttendance()
-          if (subjectResponse.success) {
-            setSubjectAttendance(subjectResponse.data)
-            console.log('✅ Subject attendance loaded:', subjectResponse.data)
+          } catch (error) {
+            console.error('❌ Error fetching profile:', error)
           }
-        } catch (subjectError) {
-          console.error('❌ Failed to fetch subject attendance:', subjectError)
+        } else {
+          console.log('No access token found')
         }
-        
-      } catch (attendanceError) {
-        console.error('❌ Failed to fetch real attendance:', attendanceError)
-        toast.error('Could not fetch real attendance data from KMIT')
+      } else {
+        console.log('User not authenticated')
       }
       
-      // TODO: Fetch real results data when KMIT API endpoint is available
-      // For now, we'll show 0 values to indicate data needs to be fetched
-      
-    } catch (error: any) {
-      console.error('Failed to fetch KMIT profile:', error)
-      
-      if (error.message.includes('Authentication required') || error.message.includes('Authentication expired')) {
-        toast.error('Please login again')
-        navigate('/register')
-        return
-      }
-      
-      toast.error('Failed to load student data')
-      // Fall back to mock data
-      loadMockData()
-    } finally {
       setIsLoading(false)
     }
-  }
+    
+    checkAuthAndFetchData()
+  }, [isAuthenticated])
 
-  const loadMockData = () => {
-    const mockData: StudentData = {
-      name: 'STUDENT NAME',
-      hallTicket: 'HALL TICKET',
-      branch: 'Computer Science & Engineering',
-      year: '2nd Year',
-      semester: '3rd Semester',
-      studentImage: undefined,
-      attendance: {
-        overall: 88.5,
-        present: 15,
-        absent: 2,
-        noSessions: 1,
-        sessions: [
-          {"date": "2025-01-14", "status": "present", "subject": "Data Structures"},
-          {"date": "2025-01-13", "status": "present", "subject": "Computer Networks"},
-          {"date": "2025-01-12", "status": "absent", "subject": "Database Systems"}
-        ]
-      },
-      results: {
-        cgpa: 8.65
-      }
-    }
-    setStudentData(mockData)
-  }
+
 
   const handleBack = () => {
     navigate('/')
   }
 
+  // Check database table structure
+  const checkDatabaseStructure = async () => {
+    try {
+      console.log('🧪 ===== CHECKING DATABASE STRUCTURE =====')
+      
+      // Test 1: Check if student_credentials table exists and has data
+      const { data: credsData, error: credsError } = await supabase
+        .from('student_credentials')
+        .select('*')
+        .limit(1)
+      console.log('🧪 student_credentials table test:', { data: credsData, error: credsError })
+      
+      // Test 2: Check if student_profiles table exists and has data
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('student_profiles')
+        .select('*')
+        .limit(1)
+      console.log('🧪 student_profiles table test:', { data: profilesData, error: profilesError })
+      
+      // Test 3: Check if login_mappings table exists and has data
+      const { data: mappingsData, error: mappingsError } = await supabase
+        .from('login_mappings')
+        .select('*')
+        .limit(1)
+      console.log('🧪 login_mappings table test:', { data: mappingsData, error: mappingsError })
+      
+      // Test 4: Try to get table info
+      try {
+        const { data: tableInfo, error: tableError } = await supabase
+          .rpc('get_table_info', { table_name: 'student_profiles' })
+        console.log('🧪 Table info:', { data: tableInfo, error: tableError })
+      } catch (e) {
+        console.log('🧪 Could not get table info (RPC not available):', e)
+      }
+      
+      console.log('🧪 ===== DATABASE STRUCTURE CHECK END =====')
+      
+    } catch (error) {
+      console.error('❌ Database structure check failed:', error)
+    }
+  }
+
+  // Test Supabase connection directly
+  const testSupabaseConnection = async () => {
+    try {
+      console.log('🧪 ===== TESTING SUPABASE CONNECTION =====')
+      
+      // Test 1: Basic connection test
+      console.log('🧪 Test 1: Testing basic connection...')
+      const { data: testData, error: testError } = await supabase
+        .from('student_credentials')
+        .select('count')
+        .limit(1)
+      console.log('🧪 Basic connection test:', { data: testData, error: testError })
+      
+      // Test 2: Check environment variables
+      console.log('🧪 Test 2: Checking environment variables...')
+      console.log('🧪 VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Not set')
+      console.log('🧪 VITE_SUPABASE_ANON_KEY:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Not set')
+      
+      // Test 3: Try a simple insert operation
+      console.log('🧪 Test 3: Testing simple insert operation...')
+      const testInsertData = {
+        mobile_number: 'TEST_' + Date.now(),
+        password: 'test_password'
+      }
+      
+      const { data: insertData, error: insertError } = await supabase
+        .from('student_credentials')
+        .insert([testInsertData])
+        .select()
+      
+      console.log('🧪 Simple insert test:', { data: insertData, error: insertError })
+      
+      // Test 4: Clean up test data
+      if (insertData && insertData.length > 0) {
+        console.log('🧪 Test 4: Cleaning up test data...')
+        const { error: deleteError } = await supabase
+          .from('student_credentials')
+          .delete()
+          .eq('mobile_number', testInsertData.mobile_number)
+        console.log('🧪 Cleanup result:', { error: deleteError })
+      }
+      
+      console.log('🧪 ===== SUPABASE CONNECTION TEST END =====')
+      
+    } catch (error) {
+      console.error('❌ Supabase connection test failed:', error)
+    }
+  }
 
 
   if (isLoading) {
@@ -970,6 +775,45 @@ export default function DashboardPage() {
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Search</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Debug Section - Remove this in production */}
+        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-3">
+            🧪 Debug Tools (Remove in Production)
+          </h3>
+          <div className="space-y-2">
+            <button
+              onClick={checkDatabaseState}
+              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+            >
+              Check Database State
+            </button>
+            <button
+              onClick={testDatabaseOperations}
+              className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm ml-2"
+            >
+              Test Database Operations
+            </button>
+            <button
+              onClick={testExactProfileData}
+              className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm ml-2"
+            >
+              Test Exact Profile Data
+            </button>
+            <button
+              onClick={checkDatabaseStructure}
+              className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm ml-2"
+            >
+              Check Database Structure
+            </button>
+            <button
+              onClick={testSupabaseConnection}
+              className="px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm ml-2"
+            >
+              Test Supabase Connection
             </button>
           </div>
         </div>
