@@ -518,8 +518,16 @@ export default function DashboardPage() {
       // Always check database state first to see what's in there
       await checkDatabaseState()
       
-      if (isAuthenticated) {
-        console.log('Is authenticated:', isAuthenticated)
+      // Check both context authentication and KMIT API authentication
+      const contextAuthenticated = isAuthenticated
+      const kmitAuthenticated = apiClient.isAuthenticated()
+      
+      console.log('🔐 Authentication state check:')
+      console.log('  - Context isAuthenticated:', contextAuthenticated)
+      console.log('  - KMIT API isAuthenticated:', kmitAuthenticated)
+      
+      if (contextAuthenticated || kmitAuthenticated) {
+        console.log('✅ User is authenticated (either context or KMIT API)')
         const currentToken = localStorage.getItem('kmit_access_token')
         console.log('Current token:', currentToken)
         
@@ -600,7 +608,11 @@ export default function DashboardPage() {
           console.log('No access token found')
         }
       } else {
-        console.log('User not authenticated')
+        console.log('❌ User not authenticated in either context or KMIT API')
+        console.log('🔍 Available tokens in localStorage:')
+        console.log('  - kmit_access_token:', localStorage.getItem('kmit_access_token') ? 'Present' : 'Missing')
+        console.log('  - kmit_refresh_token:', localStorage.getItem('kmit_refresh_token') ? 'Present' : 'Missing')
+        console.log('  - kmit_student_id:', localStorage.getItem('kmit_student_id') ? 'Present' : 'Missing')
       }
       
       setIsLoading(false)
