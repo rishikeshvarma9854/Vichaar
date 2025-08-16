@@ -24,289 +24,93 @@ const getOrdinalSuffix = (num: number): string => {
 
 // Helper function to update profile in database with complete information
 const updateProfileInDatabase = async (profileData: any, fullPayload: any) => {
-  console.log('🚀 ===== updateProfileInDatabase FUNCTION START =====')
-  console.log('🚀 updateProfileInDatabase function called!')
-  console.log('🚀 profileData received:', profileData)
-  console.log('🚀 fullPayload received:', fullPayload)
-  
   try {
+    console.log('🚀 ===== updateProfileInDatabase FUNCTION START =====')
+    console.log('🚀 updateProfileInDatabase function called!')
+    console.log('🚀 profileData received:', profileData)
+    console.log('🚀 fullPayload received:', fullPayload)
+    
     console.log('💾 Updating profile in database with complete information...')
     
-    // Try multiple sources to find the mobile number
+    // Extract the CORRECT mobile number from the KMIT API response
+    // This should be the student's actual mobile number, not the login number
     let mobileNumber = null
     
-    // Source 1: Check localStorage for currentStudent
-    const currentStudent = localStorage.getItem('currentStudent')
-    if (currentStudent) {
-      try {
-        const studentInfo = JSON.parse(currentStudent)
-        mobileNumber = studentInfo.mobile_number || studentInfo.hallTicket
-        console.log('📱 Found mobile number from currentStudent:', mobileNumber)
-      } catch (e) {
-        console.log('⚠️ Failed to parse currentStudent from localStorage')
-      }
-    }
-    
-    // Source 2: Try to get mobile number from KMIT API response
-    if (!mobileNumber && fullPayload?.student?.phone) {
+    // Priority 1: Use mobile number from KMIT API response
+    if (fullPayload?.student?.phone) {
       mobileNumber = fullPayload.student.phone
-      console.log('📱 Found mobile number from KMIT API response:', mobileNumber)
-    }
-    
-    // Source 2.5: Try to get mobile number from profileData
-    if (!mobileNumber && profileData.phone) {
+      console.log('📱 Found mobile number from KMIT API student.phone:', mobileNumber)
+    } else if (fullPayload?.phone) {
+      mobileNumber = fullPayload.phone
+      console.log('📱 Found mobile number from KMIT API phone:', mobileNumber)
+    } else if (profileData?.phone) {
       mobileNumber = profileData.phone
       console.log('📱 Found mobile number from profileData.phone:', mobileNumber)
-    }
-    
-    // Source 3: Check localStorage for currentTokens (from auto-login)
-    if (!mobileNumber) {
-      const currentTokens = localStorage.getItem('currentTokens')
-      if (currentTokens) {
+    } else {
+      // Fallback: Use currentStudent from localStorage (for backward compatibility)
+      const currentStudent = localStorage.getItem('currentStudent')
+      if (currentStudent) {
         try {
-          const tokens = JSON.parse(currentTokens)
-          // Extract student ID from tokens if available
-          const studentId = localStorage.getItem('kmit_student_id')
-          if (studentId) {
-            console.log('🆔 Found student ID from tokens:', studentId)
-            // We'll use this to search in the database
-          }
+          const parsed = JSON.parse(currentStudent)
+          mobileNumber = parsed.mobile_number || parsed.phone
+          console.log('📱 Found mobile number from currentStudent fallback:', mobileNumber)
         } catch (e) {
-          console.log('⚠️ Failed to parse currentTokens from localStorage')
+          console.error('Failed to parse currentStudent:', e)
         }
-      }
-    }
-    
-    // Source 3: Fast search by hall ticket (most efficient)
-    if (!mobileNumber && profileData.htno) {
-      console.log('🔍 Fast search by hall ticket:', profileData.htno)
-      try {
-        const searchResult = await supabaseDB.searchByHallTicket(profileData.htno)
-        console.log('🔍 Hall ticket search result:', searchResult)
-        
-        if (searchResult.error) {
-          console.log('⚠️ Hall ticket search error:', searchResult.error)
-        } else if (searchResult.data && searchResult.data.length > 0) {
-          mobileNumber = searchResult.data[0].mobile_number
-          console.log('✅ Found mobile number by hall ticket:', mobileNumber)
-        } else {
-          console.log('⚠️ No hall ticket match found')
-        }
-      } catch (searchErr) {
-        console.log('⚠️ Hall ticket search failed:', searchErr)
-      }
-    }
-    
-    // Source 4: Fast search by name (if hall ticket search failed)
-    if (!mobileNumber && profileData.name) {
-      console.log('🔍 Fast search by name:', profileData.name)
-      try {
-        const searchResult = await supabaseDB.searchByName(profileData.name)
-        console.log('🔍 Name search result:', searchResult)
-        
-        if (searchResult.error) {
-          console.log('⚠️ Name search error:', searchResult.error)
-        } else if (searchResult.data && searchResult.data.length > 0) {
-          mobileNumber = searchResult.data[0].mobile_number
-          console.log('✅ Found mobile number by name:', mobileNumber)
-        } else {
-          console.log('⚠️ No name match found')
-        }
-      } catch (searchErr) {
-        console.log('⚠️ Name search failed:', searchErr)
-      }
-    }
-    
-    // Source 5: Check if this student already has a profile by looking for exact matches
-    if (!mobileNumber) {
-      console.log('🔍 Source 5: Checking for existing student profile...')
-      try {
-        // Get all profiles and look for exact matches
-        const { data: allProfiles, error: profilesError } = await supabase
-          .from('student_profiles')
-          .select('*')
-        
-        if (profilesError) {
-          console.log('⚠️ Error fetching all profiles:', profilesError)
-        } else if (allProfiles && allProfiles.length > 0) {
-          console.log('🔍 All profiles found:', allProfiles)
-          
-          // Look for a profile that EXACTLY matches this student
-          const exactMatch = allProfiles.find(profile => {
-            // Check if this profile belongs to the current student
-            // We need to be very careful here to avoid overwriting wrong profiles
-            
-            // If profile has hall_ticket and it matches, it's the right one
-            if (profile.hall_ticket && profile.hall_ticket === profileData.htno) {
-              return true
-            }
-            
-            // If profile has name and it matches, it's the right one
-            if (profile.name && profile.name === profileData.name) {
-              return true
-            }
-            
-            // If profile has mobile number that matches current student's mobile (from localStorage)
-            const currentStudent = localStorage.getItem('currentStudent')
-            if (currentStudent) {
-              try {
-                const parsedStudent = JSON.parse(currentStudent)
-                if (parsedStudent.mobile_number && profile.mobile_number === parsedStudent.mobile_number) {
-                  return true
-                }
-              } catch (e) {
-                console.log('⚠️ Failed to parse currentStudent from localStorage')
-              }
-            }
-            
-            return false
-          })
-          
-          if (exactMatch) {
-            mobileNumber = exactMatch.mobile_number
-            console.log('✅ Found exact matching profile:', exactMatch)
-            console.log('📱 Using mobile number:', mobileNumber)
-          } else {
-            console.log('⚠️ No exact matching profile found - this student needs a new profile')
-            console.log('🔍 Current student data:', {
-              htno: profileData.htno,
-              name: profileData.name,
-              currentStudent: localStorage.getItem('currentStudent')
-            })
-          }
-        } else {
-          console.log('⚠️ No profiles found in database')
-        }
-      } catch (searchErr) {
-        console.log('⚠️ Failed to search all profiles:', searchErr)
       }
     }
     
     if (!mobileNumber) {
-      console.log('❌ Could not find mobile number from any source')
-      console.log('🔍 Available data:', {
-        currentStudent: localStorage.getItem('currentStudent'),
-        currentTokens: localStorage.getItem('currentTokens'),
-        kmitStudentId: localStorage.getItem('kmit_student_id'),
-        profileData: profileData
-      })
-      
-      // Try to create a new profile for this student
-      console.log('🆕 Attempting to create new profile for this student...')
-      
-      try {
-        // Get the mobile number from currentStudent in localStorage
-        const currentStudent = localStorage.getItem('currentStudent')
-        if (currentStudent) {
-          try {
-            const parsedStudent = JSON.parse(currentStudent)
-            const newMobileNumber = parsedStudent.mobile_number
-            
-            if (newMobileNumber) {
-              console.log('📱 Creating new profile with mobile number:', newMobileNumber)
-              
-              // Create new profile data
-              const newProfileData = {
-                mobile_number: newMobileNumber,
-                hall_ticket: profileData.htno || '',
-                name: profileData.name || '',
-                branch: profileData.branch?.name || profileData.branch || '',
-                year: profileData.currentyear?.toString() || '',
-                semester: profileData.currentsemester?.toString() || '',
-                student_image: fullPayload?.studentimage || null,
-                qr_code: fullPayload?.qrcode || null,
-                profile_data: fullPayload
-              }
-              
-              console.log('📝 New profile data to insert:', newProfileData)
-              
-              // Insert the new profile
-              const { data: insertResult, error: insertError } = await supabase
-                .from('student_profiles')
-                .insert([newProfileData])
-                .select()
-              
-              if (insertError) {
-                console.error('❌ Failed to create new profile:', insertError)
-                toast.error('Failed to create profile in database')
-                return
-              } else {
-                console.log('✅ New profile created successfully:', insertResult)
-                toast.success('New profile created in database!')
-                return
-              }
-            } else {
-              console.log('⚠️ No mobile number found in currentStudent')
-            }
-          } catch (e) {
-            console.log('⚠️ Failed to parse currentStudent from localStorage:', e)
-          }
-        } else {
-          console.log('⚠️ No currentStudent found in localStorage')
-        }
-        
-        console.log('❌ Cannot create profile without mobile number, skipping database update')
-        return
-        
-      } catch (error) {
-        console.error('❌ Error creating new profile:', error)
-        toast.error('Failed to create profile')
-        return
-      }
+      console.error('❌ No mobile number found for profile update!')
+      return
     }
     
-    // Prepare complete profile data - correctly map KMIT API fields to database fields
+    console.log('📱 Using mobile number for profile update:', mobileNumber)
+    
+    // Create complete profile data
     const completeProfileData = {
-      hall_ticket: profileData.htno || '', // KMIT API: profile.payload.student.htno
-      name: profileData.name || '', // KMIT API: profile.payload.student.name
-      branch: profileData.branch?.name || '', // KMIT API: profile.payload.student.branch.name
-      year: profileData.currentyear?.toString() || '', // KMIT API: profile.payload.student.currentyear
-      semester: profileData.currentsemester?.toString() || '', // KMIT API: profile.payload.student.currentsemester
-      student_image: fullPayload?.studentimage || null, // KMIT API: profile.payload.studentimage
-      qr_code: fullPayload?.qrcode || null, // KMIT API: profile.payload.qrcode
-      profile_data: fullPayload // Store the complete KMIT API response
+      hall_ticket: profileData.htno || '',
+      name: profileData.name || '',
+      branch: profileData.branch?.name || '',
+      year: profileData.currentyear?.toString() || '',
+      semester: profileData.currentsemester?.toString() || '',
+      student_image: fullPayload.studentimage || null,
+      qr_code: fullPayload.qrcode || null,
+      profile_data: fullPayload
     }
     
     console.log('📝 Complete profile data to update:', completeProfileData)
     console.log('📱 Updating profile for mobile number:', mobileNumber)
     
-    // Debug: Show the exact data mapping
+    // Verify data mapping
     console.log('🔍 Data mapping verification:')
     console.log('  - Hall Ticket (htno):', profileData.htno)
     console.log('  - Name:', profileData.name)
     console.log('  - Branch:', profileData.branch?.name)
     console.log('  - Year:', profileData.currentyear)
     console.log('  - Semester:', profileData.currentsemester)
-    console.log('  - Student Image:', fullPayload?.studentimage ? 'Present' : 'Missing')
-    console.log('  - QR Code:', fullPayload?.qrcode ? 'Present' : 'Missing')
+    console.log('  - Student Image:', fullPayload.studentimage ? 'Present' : 'Not present')
+    console.log('  - QR Code:', fullPayload.qrcode ? 'Present' : 'Not present')
     
-    // Update the profile in database
     console.log('🔍 Calling supabaseDB.updateProfile with:', { mobileNumber, completeProfileData })
     
-    try {
-      const updateResult = await supabaseDB.updateProfile(mobileNumber, completeProfileData)
-      console.log('🔍 Update result:', updateResult)
-      
-      if (updateResult.error) {
-        console.error('❌ Failed to update profile in database:', updateResult.error)
-        toast.error('Profile update failed')
-      } else if (updateResult.data) {
-        console.log('✅ Profile updated in database successfully')
-        console.log('🔍 Updated data:', updateResult.data)
-        toast.success('Profile updated in database!')
-      } else {
-        console.log('⚠️ Profile update returned no data and no error')
-        toast.error('Profile update failed')
-      }
-    } catch (updateError) {
-      console.error('❌ Error calling supabaseDB.updateProfile:', updateError)
-      toast.error('Profile update failed')
+    // Update the profile using the CORRECT mobile number
+    const updateResult = await supabaseDB.updateProfile(mobileNumber, completeProfileData)
+    
+    console.log('🔍 Update result:', updateResult)
+    
+    if (updateResult.error) {
+      console.error('❌ Failed to update profile:', updateResult.error)
+      return
     }
     
+    console.log('✅ Profile updated in database successfully')
+    console.log('🔍 Updated data:', updateResult.data)
+    
     console.log('🚀 ===== updateProfileInDatabase FUNCTION END =====')
+    
   } catch (error) {
     console.error('❌ Error in updateProfileInDatabase:', error)
-    // Don't fail the main flow if database update fails
   }
 }
 
