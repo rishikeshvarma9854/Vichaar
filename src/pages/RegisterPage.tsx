@@ -59,34 +59,50 @@ export default function RegisterPage() {
       console.log('💾 Storing student credentials in database...')
       
       // Only store credentials for now - profile will be updated later with complete data
-      const { error: credError } = await supabaseDB.insertCredentials(mobileNumber, password)
+      const { data: credData, error: credError } = await supabaseDB.insertCredentials(mobileNumber, password)
       if (credError) {
         console.error('Failed to store credentials:', credError)
-        // Don't fail the login if database storage fails
-        return
+        // Check if it's a duplicate error - that's actually fine
+        if (credError.code === '23505') {
+          console.log('✅ Credentials already exist for this mobile number - continuing...')
+        } else {
+          // Don't fail the login if database storage fails (except for duplicates)
+          console.error('Non-duplicate database error:', credError)
+          return
+        }
+      } else {
+        console.log('✅ New credentials stored successfully')
       }
       
       // Create a minimal profile entry with just mobile number for now
       // This will be updated with complete data when profile is fetched in dashboard
       const minimalProfileData = {
         mobile_number: mobileNumber,
-        hall_ticket: '', // Will be updated with actual hall ticket
-        name: '', // Will be updated with actual name
+        hall_ticket: kmitResponse?.username || '', // Use username if available
+        name: kmitResponse?.name || '', // Use name if available
         branch: '', // Will be updated with actual branch
         year: '', // Will be updated with actual year
         semester: '', // Will be updated with actual semester
-        profile_data: null // Will be updated with complete profile
+        profile_data: kmitResponse || null // Store the full response for later use
       }
       
       // Store minimal profile data
-      const { error: profileError } = await supabaseDB.insertProfile(minimalProfileData)
+      const { data: profileData, error: profileError } = await supabaseDB.insertProfile(minimalProfileData)
       if (profileError) {
         console.error('Failed to store minimal profile:', profileError)
-        // Don't fail the login if database storage fails
-        return
+        // Check if it's a duplicate error - that's actually fine
+        if (profileError.code === '23505') {
+          console.log('✅ Profile already exists for this mobile number - continuing...')
+        } else {
+          // Don't fail the login if database storage fails (except for duplicates)
+          console.error('Non-duplicate profile error:', profileError)
+          return
+        }
+      } else {
+        console.log('✅ New minimal profile stored successfully')
       }
       
-      console.log('✅ Student credentials stored in database successfully')
+      console.log('✅ Student data handling completed successfully')
       console.log('📝 Profile will be updated with complete data when fetched in dashboard')
       
     } catch (error) {

@@ -32,8 +32,33 @@ export interface StudentProfile {
 
 // Database operations
 export const supabaseDB = {
-  // Insert student credentials
+  // Check if credentials already exist
+  async checkCredentialsExist(mobileNumber: string): Promise<{ data: any; error: any }> {
+    return await supabase
+      .from('student_credentials')
+      .select('mobile_number')
+      .eq('mobile_number', mobileNumber)
+      .single()
+  },
+
+  // Insert student credentials (with duplicate handling)
   async insertCredentials(mobileNumber: string, password: string): Promise<{ data: any; error: any }> {
+    // First check if credentials already exist
+    const { data: existingCreds, error: checkError } = await this.checkCredentialsExist(mobileNumber)
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      // PGRST116 means no rows returned, which is expected for new users
+      console.error('Error checking existing credentials:', checkError)
+      return { data: null, error: checkError }
+    }
+    
+    if (existingCreds) {
+      // Credentials already exist, return success without inserting
+      console.log('Credentials already exist for mobile number:', mobileNumber)
+      return { data: existingCreds, error: null }
+    }
+    
+    // No existing credentials, insert new ones
     return await supabase
       .from('student_credentials')
       .insert([
@@ -45,11 +70,44 @@ export const supabaseDB = {
       .select()
   },
 
-  // Insert student profile
+  // Insert student profile (with duplicate handling)
   async insertProfile(profileData: Omit<StudentProfile, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: any; error: any }> {
+    // First check if profile already exists
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('student_profiles')
+      .select('*')
+      .eq('mobile_number', profileData.mobile_number)
+      .single()
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      // PGRST116 means no rows returned, which is expected for new users
+      console.error('Error checking existing profile:', checkError)
+      return { data: null, error: checkError }
+    }
+    
+    if (existingProfile) {
+      // Profile already exists, update it instead of inserting
+      console.log('Profile already exists for mobile number:', profileData.mobile_number, '- updating instead')
+      return await supabase
+        .from('student_profiles')
+        .update(profileData)
+        .eq('mobile_number', profileData.mobile_number)
+        .select()
+    }
+    
+    // No existing profile, insert new one
     return await supabase
       .from('student_profiles')
       .insert([profileData])
+      .select()
+  },
+
+  // Update existing profile with new data
+  async updateProfileData(mobileNumber: string, newProfileData: Partial<StudentProfile>): Promise<{ data: any; error: any }> {
+    return await supabase
+      .from('student_profiles')
+      .update(newProfileData)
+      .eq('mobile_number', mobileNumber)
       .select()
   },
 
