@@ -153,7 +153,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For support, email support@kmitvichaar.com or create an issue in the repository.
+For support, email rishikesh23@kmit.edu.in or create an issue in the repository.
 
 ---
 
