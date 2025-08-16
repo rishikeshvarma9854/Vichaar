@@ -88,6 +88,22 @@ init_db()
 # KMIT API configuration
 KMIT_API_BASE = "https://kmit-api.teleuniv.in"
 
+# Add this after your imports, before other routes
+@app.route('/')
+def root():
+    """Root endpoint to confirm backend is running"""
+    return jsonify({
+        "message": "KMIT Vichaar Backend is running!",
+        "status": "active",
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": {
+            "test": "/api/test-kmit",
+            "attendance": "/api/attendance",
+            "results": "/api/results",
+            "timetable": "/api/timetable"
+        }
+    })
+
 @app.route('/api/test-kmit', methods=['GET'])
 def test_kmit():
     """
