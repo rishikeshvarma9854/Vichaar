@@ -7,7 +7,16 @@ import os
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, 
+     origins=[
+         "https://vichaar-kappa.vercel.app",
+         "https://vichaar-g05ubfbf0-kalki2898ads-projects.vercel.app",
+         "http://localhost:3000",
+         "http://localhost:3001"
+     ],
+     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+     supports_credentials=False)  # Enable CORS for all routes
 
 # Database configuration
 DATABASE = 'kmit_vichaar.db'
@@ -88,7 +97,16 @@ init_db()
 # KMIT API configuration
 KMIT_API_BASE = "https://kmit-api.teleuniv.in"
 
-# Add this after your imports, before other routes
+# Handle CORS preflight requests
+@app.route('/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    """Handle OPTIONS requests for CORS preflight"""
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', 'https://vichaar-kappa.vercel.app')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+    return response
+
 @app.route('/')
 def root():
     """Root endpoint to confirm backend is running"""
