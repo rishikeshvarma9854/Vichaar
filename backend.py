@@ -908,9 +908,12 @@ def get_timetable():
         print(f"Unexpected error: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+
 if __name__ == '__main__':
     print("🚀 Starting KMIT Vichaar Backend...")
     print("🔗 Backend URL: http://localhost:5000")
     print("📱 Frontend should run on: http://localhost:3001")
     print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=True)
+
+app.debug = False
