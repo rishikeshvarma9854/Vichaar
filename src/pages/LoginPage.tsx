@@ -106,10 +106,8 @@ export default function LoginPage() {
     try {
       console.log('🔄 Auto-login to KMIT API...')
       
-      // Add human-like delay to avoid automation detection
-      console.log('⏳ Adding delay to mimic human behavior...')
-      await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second delay
-      console.log('🚀 Proceeding with KMIT API login...')
+      // Remove delay to prevent hCaptcha token expiration
+      console.log('🚀 Proceeding with KMIT API login immediately...')
       
       // Prepare login payload with captcha token
       const loginPayload = {
