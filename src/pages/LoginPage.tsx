@@ -85,17 +85,18 @@ export default function LoginPage() {
       return
     }
 
-    if (!captchaToken) {
-      toast.error('Please complete the security verification')
-      return
-    }
+    // Remove captcha requirement for search - only needed for login
+    // if (!captchaToken) {
+    //   toast.error('Please complete the security verification')
+    //   return
+    // }
 
     setIsLoading(true)
     
     try {
       console.log('🔍 Search Debug:')
       console.log('Search query:', searchQuery.trim())
-      console.log('Captcha token:', captchaToken ? 'Present' : 'Missing')
+      console.log('Captcha token:', captchaToken ? 'Present' : 'Not required for search')
       
       // Enhanced search: Try multiple search strategies
       let searchResults = null
@@ -140,7 +141,7 @@ export default function LoginPage() {
         // Found student(s) - show results for selection
         setSearchResults(searchResults)
         setHasSearched(true)
-        toast.success(`Found ${searchResults.length} student(s)!`)
+        toast.success(`Found ${searchResults.length} student(s)! Click on a result to login.`)
         
       } else {
         setSearchResults([])
@@ -152,11 +153,11 @@ export default function LoginPage() {
       toast.error('Search failed. Please try again.')
     } finally {
       setIsLoading(false)
-      // Reset captcha after search (same as register page)
-      if (window.hcaptcha) {
-        window.hcaptcha.reset()
-        setCaptchaToken(null)
-      }
+      // Don't reset captcha after search since we need it for login
+      // if (window.hcaptcha) {
+      //   window.hcaptcha.reset()
+      //   setCaptchaToken(null)
+      // }
     }
   }
 
