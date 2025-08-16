@@ -287,14 +287,12 @@ def login():
             "error": f"Server error: {str(e)}"
         }), 500
 
-@app.route('/api/login-with-token', methods=['POST'])
-def login_with_token():
-    """
-    Alternative login endpoint that expects the complete payload including hCaptcha token
-    """
+@app.route('/login-with-token', methods=['POST'])
+def login_with_token_direct():
+    """Direct login endpoint without /api prefix for frontend compatibility"""
     try:
         data = request.get_json()
-        print(f"Login with token attempt: {data}")
+        print(f"Direct login attempt: {data}")
         
         # Expect the complete payload from frontend
         if not all(key in data for key in ['username', 'password', 'application', 'token']):
