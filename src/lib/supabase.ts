@@ -179,6 +179,54 @@ export const supabaseDB = {
       .limit(1)
   },
 
+  // Create mapping between login credentials and student profile
+  async createLoginMapping(loginPhoneNumber: string, studentMobileNumber: string): Promise<{ data: any; error: any }> {
+    return await supabase
+      .from('login_mappings')
+      .upsert([
+        {
+          login_phone_number: loginPhoneNumber,
+          student_mobile_number: studentMobileNumber,
+          created_at: new Date().toISOString()
+        }
+      ], {
+        onConflict: 'login_phone_number',
+        ignoreDuplicates: false
+      })
+      .select()
+  },
+
+  // Get student profile by login phone number
+  async getProfileByLoginPhone(loginPhoneNumber: string): Promise<{ data: any; error: any }> {
+    // First get the mapping
+    const { data: mapping, error: mappingError } = await supabase
+      .from('login_mappings')
+      .select('student_mobile_number')
+      .eq('login_phone_number', loginPhoneNumber)
+      .single()
+    
+    if (mappingError || !mapping) {
+      // If no mapping exists, try to get profile directly (for backward compatibility)
+      return await this.getProfile(loginPhoneNumber)
+    }
+    
+    // Then get the profile using the student's mobile number
+    return await this.getProfile(mapping.student_mobile_number)
+  },
+
+  // Get student profile by login phone number (with fallback)
+  async getStudentProfileForLogin(loginPhoneNumber: string): Promise<{ data: any; error: any }> {
+    // Try to get profile by login phone number first
+    const { data: profile, error: profileError } = await this.getProfileByLoginPhone(loginPhoneNumber)
+    
+    if (profile && !profileError) {
+      return { data: profile, error: null }
+    }
+    
+    // If that fails, try to get profile directly (for backward compatibility)
+    return await this.getProfile(loginPhoneNumber)
+  },
+
   // Update profile data
   async updateProfile(mobileNumber: string, profileData: Partial<StudentProfile>): Promise<{ data: any; error: any }> {
     return await supabase
