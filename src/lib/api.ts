@@ -2,9 +2,10 @@ import axios from 'axios'
 
 // Backend URL configuration
 // For local development: http://localhost:5000/api
+// For Vercel: https://your-project.vercel.app/api
 // For ngrok: Change this to your ngrok backend URL
 // Example: const BACKEND_BASE_URL = 'https://your-ngrok-url.ngrok.io/api'
-const BACKEND_BASE_URL = 'https://vichaar-backend.onrender.com'
+const BACKEND_BASE_URL = 'https://vichaar-kappa.vercel.app/api'
 
 console.log('🌐 Backend URL:', BACKEND_BASE_URL)
 console.log('📍 Current location:', window.location.href)
