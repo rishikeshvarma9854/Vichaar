@@ -574,6 +574,9 @@ def search_students():
         cursor = conn.cursor()
         
         # Search by name (partial match) or hall ticket (exact match)
+        # Remove spaces from query for more flexible name matching
+        query_no_spaces = query.replace(' ', '')
+        
         cursor.execute('''
             SELECT 
                 kmit_id, name, hall_ticket, roll_number, branch, year, semester,
@@ -581,16 +584,18 @@ def search_students():
                 dob, father_name, father_mobile, gender, student_type, status,
                 regulation, last_updated
             FROM students 
-            WHERE name LIKE ? OR hall_ticket LIKE ? OR roll_number LIKE ?
+            WHERE name LIKE ? OR hall_ticket LIKE ? OR roll_number LIKE ? 
+                  OR REPLACE(name, ' ', '') LIKE ? OR REPLACE(name, ' ', '') LIKE ?
             ORDER BY 
                 CASE 
                     WHEN hall_ticket = ? THEN 1
                     WHEN name LIKE ? THEN 2
-                    ELSE 3
+                    WHEN REPLACE(name, ' ', '') LIKE ? THEN 3
+                    ELSE 4
                 END,
                 name ASC
             LIMIT 20
-        ''', (f'%{query}%', f'%{query}%', f'%{query}%', query, f'%{query}%'))
+        ''', (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query_no_spaces}%', f'%{query_no_spaces}%', query, f'%{query}%', f'%{query_no_spaces}%'))
         
         results = cursor.fetchall()
         
@@ -605,7 +610,13 @@ def search_students():
         
         # Log search history
         searcher_ip = request.remote_addr
-        search_type = 'name' if any(query.lower() in str(row['name']).lower() for row in results) else 'hall_ticket'
+        # Check if it's a name search (including space-ignoring matches)
+        is_name_search = any(
+            query.lower() in str(row['name']).lower() or 
+            query_no_spaces.lower() in str(row['name']).lower().replace(' ', '')
+            for row in results
+        )
+        search_type = 'name' if is_name_search else 'hall_ticket'
         
         cursor.execute('''
             INSERT INTO search_history (searcher_ip, search_term, search_type, results_count)
