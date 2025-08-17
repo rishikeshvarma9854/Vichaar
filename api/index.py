@@ -18,8 +18,8 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
      supports_credentials=False)  # Enable CORS for all routes
 
-# Database configuration
-DATABASE = 'kmit_vichaar.db'
+# Database configuration - Use in-memory database for Vercel compatibility
+DATABASE = ':memory:'  # In-memory database that works on Vercel
 
 def init_db():
     """Initialize the database with required tables"""
