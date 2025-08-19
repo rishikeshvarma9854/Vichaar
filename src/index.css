@@ -19,10 +19,59 @@
   }
   
   .card {
-    @apply bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6;
+    @apply bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6;
   }
   
   .input-field {
     @apply w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;
+  }
+}
+
+/* Mobile-specific fixes */
+@layer utilities {
+  /* Prevent horizontal scrolling */
+  .mobile-container {
+    @apply w-full max-w-full overflow-x-hidden;
+  }
+  
+  /* Mobile-friendly spacing */
+  .mobile-spacing {
+    @apply p-3 sm:p-4;
+  }
+  
+  /* Mobile-friendly text sizes */
+  .mobile-text {
+    @apply text-sm sm:text-base;
+  }
+  
+  .mobile-title {
+    @apply text-lg sm:text-xl;
+  }
+  
+  .mobile-heading {
+    @apply text-xl sm:text-2xl;
+  }
+}
+
+/* Mobile viewport fixes */
+@media (max-width: 640px) {
+  body, html {
+    @apply overflow-x-hidden;
+  }
+  
+  .dashboard-container {
+    @apply w-full max-w-full px-3;
+  }
+  
+  .mobile-header {
+    @apply flex-col space-y-3;
+  }
+  
+  .mobile-button {
+    @apply px-3 py-2 text-sm;
+  }
+  
+  .mobile-grid {
+    @apply grid-cols-2 gap-3;
   }
 }

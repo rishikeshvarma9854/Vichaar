@@ -638,23 +638,25 @@ export default function DashboardPage() {
   const attendance = studentData.attendance
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
-      <div className="min-h-screen p-4">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center space-x-4">
+    <div className={`min-h-screen w-full max-w-full overflow-x-hidden ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      <div className="min-h-screen w-full max-w-full p-4 box-border">
+        {/* Header - Fixed for mobile */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
+          {/* Left side - Logo and Title */}
+          <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
                 <GraduationCap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">KMIT VICHAAR</h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Student Information Portal</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">KMIT VICHAAR</h1>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Student Information Portal</p>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
+          {/* Right side - Status and Back Button */}
+          <div className="flex items-center space-x-3 w-full sm:w-auto">
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
@@ -666,34 +668,36 @@ export default function DashboardPage() {
             {/* Connection Status */}
             <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm font-medium">Connected to KMIT</span>
+              <span className="text-xs sm:text-sm font-medium hidden sm:inline">Connected to KMIT</span>
+              <span className="text-xs sm:text-sm font-medium sm:hidden">KMIT</span>
             </div>
             
-            {/* Back to Search */}
+            {/* Back to Search - Fixed for mobile */}
             <button
               onClick={() => navigate('/')}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              className="flex items-center space-x-2 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm whitespace-nowrap"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to Search</span>
+              <span className="hidden sm:inline">Back to Search</span>
+              <span className="sm:hidden">Back</span>
             </button>
           </div>
         </div>
 
 
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Main Content Grid - Fixed for mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Student Profile */}
           <div className="card">
-            <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-6 flex items-center">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white mb-4 sm:mb-6 flex items-center">
               <User className="w-5 h-5 mr-2 text-primary-600" />
               Student Profile
             </h3>
             
-            <div className="flex flex-col items-center space-y-6">
+            <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
               {/* Profile Picture */}
-              <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary-200 dark:border-primary-700 shadow-lg">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-primary-200 dark:border-primary-700 shadow-lg">
                 {studentData?.studentImage ? (
                   <img 
                     src={studentData.studentImage} 
@@ -702,76 +706,72 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-600 flex items-center justify-center">
-                    <User className="w-16 h-16 text-white" />
+                    <User className="w-12 h-12 sm:w-16 sm:h-16 text-white" />
                   </div>
                 )}
               </div>
               
-
-              
-              {/* Student Name */}
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
+              {/* Student Name and Info */}
+              <div className="text-center sm:text-left space-y-2">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">
                   {studentData.name}
                 </h2>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">
                   {studentData.hallTicket}
                 </p>
-              </div>
-              
-              {/* Profile Information */}
-              <div className="w-full space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Branch:</span>
-                  <span className="font-medium text-gray-800 dark:text-white">{studentData.branch}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Year:</span>
-                  <span className="font-medium text-gray-800 dark:text-white">{studentData.year}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Semester:</span>
-                  <span className="font-medium text-gray-800 dark:text-white">{studentData.semester}</span>
+                
+                {/* Profile Information - Stacked on mobile */}
+                <div className="space-y-2 text-sm sm:text-base">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Branch:</span>
+                    <span className="font-medium text-gray-800 dark:text-white">{studentData.branch}</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Year:</span>
+                    <span className="font-medium text-gray-800 dark:text-white">{studentData.year}</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Semester:</span>
+                    <span className="font-medium text-gray-800 dark:text-white">{studentData.semester}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Attendance Overview */}
+          {/* Attendance Overview - Fixed for mobile */}
           <div className="card">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white flex items-center">
                 <Calendar className="w-5 h-5 mr-2 text-primary-600" />
                 Attendance Overview
               </h3>
             </div>
 
             {/* Overall Attendance */}
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Overall Attendance</span>
-                <span className="text-lg font-bold text-green-600">{attendance?.overall || 0}%</span>
+                <span className="text-base sm:text-lg font-bold text-green-600">{attendance?.overall || 0}%</span>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 sm:h-3">
                 <div 
-                  className="bg-green-500 h-3 rounded-full transition-all duration-500" 
+                  className="bg-green-500 h-2 sm:h-3 rounded-full transition-all duration-500" 
                   style={{ width: `${attendance?.overall || 0}%` }}
                 ></div>
               </div>
             </div>
 
             {/* Today's Sessions */}
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6">
               <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Today's Sessions</h4>
-              
-
               
               {!attendanceDetails?.payload?.attendanceDetails?.find((day: any) => day.date === "Today") ? (
                 <div className="text-center py-4 text-gray-500 dark:text-gray-400">
                   Loading attendance data...
                 </div>
               ) : (
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2">
                   {Array.from({ length: 7 }, (_, index) => {
                     // Find the actual "Today" entry in the attendance details
                     const todayData = attendanceDetails?.payload?.attendanceDetails?.find((day: any) => day.date === "Today")
@@ -789,11 +789,11 @@ export default function DashboardPage() {
                       // Check for different possible status values
                       if (period.status === 1) {
                         color = 'bg-green-500'
-                        icon = <Check className="w-3 h-3 text-white" />
+                        icon = <Check className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
                         console.log(`Period ${index + 1} marked as PRESENT`)
                       } else if (period.status === 0) {
                         color = 'bg-red-500'
-                        icon = <X className="w-3 h-3 text-white" />
+                        icon = <X className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
                         console.log(`Period ${index + 1} marked as ABSENT`)
                       } else if (period.status === 2) {
                         color = 'bg-gray-300 dark:bg-gray-600'
@@ -808,7 +808,7 @@ export default function DashboardPage() {
                     
                     return (
                       <div key={index} className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center mb-1`}>
+                        <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${color} flex items-center justify-center mb-1`}>
                           {icon}
                         </div>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -823,40 +823,40 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="mt-8">
+        {/* Quick Actions - Fixed for mobile */}
+        <div className="mt-6 sm:mt-8">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <Zap className="w-5 h-5 mr-2" />
             Quick Actions
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             <button
               onClick={handleAttendanceClick}
-              className="p-4 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
+              className="p-3 sm:p-4 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
             >
-              <Calendar className="w-6 h-6" />
-              <span className="text-sm font-medium">Attendance</span>
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="text-xs sm:text-sm font-medium">Attendance</span>
             </button>
             <button 
               onClick={handleResultsClick}
-              className="p-4 bg-green-500 hover:bg-green-600 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
+              className="p-3 sm:p-4 bg-green-500 hover:bg-green-600 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
             >
-              <BarChart3 className="w-6 h-6" />
-              <span className="text-sm font-medium">Results</span>
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="text-xs sm:text-sm font-medium">Results</span>
             </button>
             <button 
               onClick={handleTimetableClick}
-              className="p-4 bg-orange-500 hover:bg-orange-600 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
+              className="p-3 sm:p-4 bg-orange-500 hover:bg-orange-600 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
             >
-              <Clock className="w-6 h-6" />
-              <span className="text-sm font-medium">Timetable</span>
+              <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="text-xs sm:text-sm font-medium">Timetable</span>
             </button>
             <button 
               onClick={handleNetraQRClick}
-              className="p-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
+              className="p-3 sm:p-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors flex flex-col items-center space-y-2"
             >
-              <QrCode className="w-6 h-6" />
-              <span className="text-sm font-medium">Netra QR</span>
+              <QrCode className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="text-xs sm:text-sm font-medium">Netra QR</span>
             </button>
           </div>
         </div>
