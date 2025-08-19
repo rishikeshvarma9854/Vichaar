@@ -546,6 +546,11 @@ export default function LoginPage() {
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Found <span className="font-semibold text-blue-600 dark:text-blue-400">{searchResults.length}</span> student{searchResults.length === 1 ? '' : 's'}
+                  {searchResults.length > 10 && (
+                    <span className="block text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      Scroll down to see all results
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                   Click on a result to login (captcha required)
@@ -563,10 +568,19 @@ export default function LoginPage() {
                     </span>
                   </div>
                 )}
+                
+                {/* Results summary for many results */}
+                {searchResults.length > 15 && (
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      📊 Showing all {searchResults.length} results. Use the scroll bar to navigate through all matches.
+                    </p>
+                  </div>
+                )}
               </div>
               
-              {/* Results grid */}
-              <div className="space-y-4">
+              {/* Results grid with scroll */}
+              <div className="max-h-[80vh] sm:max-h-96 overflow-y-auto pr-2 space-y-4 search-results-scroll">
                 {searchResults.map((student: any, index: number) => (
                   <div
                     key={student.id || index}
@@ -586,6 +600,10 @@ export default function LoginPage() {
                         <div className="flex items-center space-x-3 mb-3">
                           <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800">
                             {student.hall_ticket || 'N/A'}
+                          </span>
+                          {/* Result number indicator */}
+                          <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
+                            #{index + 1}
                           </span>
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate mb-2">

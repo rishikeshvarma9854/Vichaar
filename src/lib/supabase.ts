@@ -170,7 +170,7 @@ export const supabaseDB = {
       .select('*')
       .or(`hall_ticket.ilike.${searchQuery},name.ilike.${searchQuery},mobile_number.ilike.${searchQuery}`)
       .order('name', { ascending: true }) // Order by name for better results
-      .limit(10) // Increased limit for better coverage
+      // Removed limit to show all results
   },
 
   // Fast search by exact hall ticket (most common case)
@@ -180,7 +180,7 @@ export const supabaseDB = {
       .from('student_profiles')
       .select('*')
       .eq('hall_ticket', cleanHallTicket)
-      .limit(1)
+      // Removed limit to show all results
   },
 
   // Fast search by exact name - improved for better accuracy
@@ -193,7 +193,7 @@ export const supabaseDB = {
       .select('*')
       .ilike('name', `%${cleanName}%`)
       .order('name', { ascending: true })
-      .limit(5)
+      // Removed limit to show all results
     
     // If no results with partial match, try word boundary search
     if (!results.data || results.data.length === 0) {
@@ -208,7 +208,7 @@ export const supabaseDB = {
           .select('*')
           .or(wordQueries.join(','))
           .order('name', { ascending: true })
-          .limit(5)
+          // Removed limit to show all results
       }
     }
     
@@ -223,7 +223,7 @@ export const supabaseDB = {
       .select('*')
       .ilike('hall_ticket', `%${cleanPartial}%`)
       .order('hall_ticket', { ascending: true })
-      .limit(5)
+      // Removed limit to show all results
   },
 
   // Get credentials by mobile number
