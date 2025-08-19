@@ -459,6 +459,13 @@ export default function LoginPage() {
                 </div>
               </div>
               
+              {/* Case sensitivity info */}
+              <div className="text-center mt-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  💡 Search is not case-sensitive - lowercase and uppercase both work
+                </p>
+              </div>
+              
               {/* Loading indicator for auto-search */}
               {isLoading && (
                 <div className="flex items-center justify-center mt-4">
@@ -587,15 +594,8 @@ export default function LoginPage() {
                     onClick={() => handleStudentClick(student)}
                     className="bg-white dark:bg-gray-800 rounded-xl p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600"
                   >
-                    <div className="flex items-center space-x-6">
-                      {/* Profile Picture */}
-                      <div className="flex-shrink-0">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-                          {student.name ? student.name.charAt(0) : 'S'}
-                        </div>
-                      </div>
-                      
-                      {/* Student Info */}
+                    <div className="flex items-center space-x-4">
+                      {/* Student Info - Full width without profile icon */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-3 mb-3">
                           <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800">
@@ -606,13 +606,13 @@ export default function LoginPage() {
                             #{index + 1}
                           </span>
                         </div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate mb-2">
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">
                           {student.name || 'Student Name'}
                         </h3>
-                        <p className="text-base text-gray-700 dark:text-gray-300 truncate mb-2">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                           {student.branch || 'Branch not specified'}
                         </p>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center space-x-4 text-xs text-gray-600 dark:text-gray-400">
                           <span className="flex items-center">
                             <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
                             {student.year || 'Year not specified'}
@@ -621,13 +621,6 @@ export default function LoginPage() {
                             <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
                             {student.semester || 'Semester not specified'}
                           </span>
-                        </div>
-                      </div>
-                      
-                      {/* Click indicator */}
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                          <ArrowRight className="w-6 h-6 text-white" />
                         </div>
                       </div>
                     </div>
