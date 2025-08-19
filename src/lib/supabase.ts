@@ -164,38 +164,65 @@ export const supabaseDB = {
   async searchStudent(searchTerm: string): Promise<{ data: any; error: any }> {
     const searchQuery = searchTerm.trim().toUpperCase()
     
-    // Use a single optimized query with proper ordering
+    // Use a single optimized query with proper ordering and better matching
     return await supabase
       .from('student_profiles')
       .select('*')
       .or(`hall_ticket.ilike.${searchQuery},name.ilike.${searchQuery},mobile_number.ilike.${searchQuery}`)
-      .limit(5) // Limit results for faster response
+      .order('name', { ascending: true }) // Order by name for better results
+      .limit(10) // Increased limit for better coverage
   },
 
   // Fast search by exact hall ticket (most common case)
   async searchByHallTicket(hallTicket: string): Promise<{ data: any; error: any }> {
+    const cleanHallTicket = hallTicket.trim().toUpperCase()
     return await supabase
       .from('student_profiles')
       .select('*')
-      .eq('hall_ticket', hallTicket.toUpperCase())
+      .eq('hall_ticket', cleanHallTicket)
       .limit(1)
   },
 
-  // Fast search by exact name
+  // Fast search by exact name - improved for better accuracy
   async searchByName(name: string): Promise<{ data: any; error: any }> {
-    return await supabase
+    const cleanName = name.trim().toUpperCase()
+    
+    // Try multiple name search strategies for better accuracy
+    let results = await supabase
       .from('student_profiles')
       .select('*')
-      .ilike('name', `%${name.toUpperCase()}%`)
-      .limit(3)
+      .ilike('name', `%${cleanName}%`)
+      .order('name', { ascending: true })
+      .limit(5)
+    
+    // If no results with partial match, try word boundary search
+    if (!results.data || results.data.length === 0) {
+      // Split name into words and search for each word
+      const nameWords = cleanName.split(/\s+/).filter(word => word.length >= 2)
+      
+      if (nameWords.length > 1) {
+        // Search for students whose names contain ALL the words (in any order)
+        let wordQueries = nameWords.map(word => `name.ilike.%${word}%`)
+        results = await supabase
+          .from('student_profiles')
+          .select('*')
+          .or(wordQueries.join(','))
+          .order('name', { ascending: true })
+          .limit(5)
+      }
+    }
+    
+    return results
   },
 
   // Fast search by partial hall ticket (for partial matches)
   async searchByPartialHallTicket(partialHallTicket: string): Promise<{ data: any; error: any }> {
+    const cleanPartial = partialHallTicket.trim().toUpperCase()
     return await supabase
       .from('student_profiles')
       .select('*')
-      .ilike('hall_ticket', `%${partialHallTicket.toUpperCase()}%`)
+      .ilike('hall_ticket', `%${cleanPartial}%`)
+      .order('hall_ticket', { ascending: true })
       .limit(5)
   },
 

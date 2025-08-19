@@ -213,7 +213,7 @@ export default function LoginPage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.toUpperCase()
+    const value = e.target.value
     setSearchQuery(value)
     
     // Auto-search as user types (with debouncing)
@@ -223,14 +223,15 @@ export default function LoginPage() {
         clearTimeout(searchTimeout.current)
       }
       
-      // Set new timeout for auto-search
+      // Set new timeout for auto-search - convert to uppercase for search
       searchTimeout.current = setTimeout(() => {
-        handleAutoSearch(value.trim())
-      }, 500) // 500ms delay to avoid too many API calls
+        handleAutoSearch(value.trim().toUpperCase())
+      }, 300) // Reduced delay for better responsiveness
     } else {
       // Clear results if input is too short
       setSearchResults([])
       setHasSearched(false)
+      setSearchStrategy('')
     }
   }
 
@@ -243,11 +244,12 @@ export default function LoginPage() {
     try {
       console.log('🔍 Auto-search for:', query.trim())
       
-      // Enhanced search: Try multiple search strategies
+      // Enhanced search: Try multiple search strategies with better prioritization
       let searchResults = null
       let searchError = null
+      let currentStrategy = ''
       
-      // Strategy 1: Try exact hall ticket match first (fastest)
+      // Strategy 1: Try exact hall ticket match first (fastest and most accurate)
       if (/^[A-Z0-9]+$/.test(query.trim())) {
         console.log('🔍 Fast search by exact hall ticket:', query.trim())
         const result = await supabaseDB.searchByHallTicket(query.trim())
@@ -255,7 +257,7 @@ export default function LoginPage() {
         searchError = result.error
         if (searchResults && searchResults.length > 0) {
           console.log('✅ Found exact hall ticket match')
-          setSearchStrategy('exact-hall-ticket')
+          currentStrategy = 'exact-hall-ticket'
         }
       }
       
@@ -267,30 +269,52 @@ export default function LoginPage() {
           searchResults = result.data
           searchError = result.error
           console.log('✅ Found partial hall ticket matches')
-          setSearchStrategy('partial-hall-ticket')
+          currentStrategy = 'partial-hall-ticket'
         }
       }
       
-      // Strategy 3: If still no results, try partial name search
+      // Strategy 3: If still no results, try improved name search
       if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
-        console.log('🔍 Partial name search:', query.trim())
+        console.log('🔍 Improved name search:', query.trim())
         const result = await supabaseDB.searchByName(query.trim())
         if (result.data && result.data.length > 0) {
           searchResults = result.data
           searchError = result.error
-          console.log('✅ Found partial name matches')
-          setSearchStrategy('partial-name')
+          console.log('✅ Found name matches')
+          currentStrategy = 'name-search'
         }
       }
       
-      // Strategy 4: If still no results, try broader search
+      // Strategy 4: If still no results, try broader search with better filtering
       if (!searchResults || searchResults.length === 0) {
-        console.log('🔍 Broad search:', query.trim())
+        console.log('🔍 Broad search with filtering:', query.trim())
         const result = await supabaseDB.searchStudent(query.trim())
-        searchResults = result.data
-        searchError = result.error
-        console.log('✅ Found broad search matches')
-        setSearchStrategy('broad-search')
+        if (result.data && result.data.length > 0) {
+          // Filter results to prioritize better matches
+          const filteredResults = result.data.filter((student: any) => {
+            const queryUpper = query.trim().toUpperCase()
+            const nameUpper = (student.name || '').toUpperCase()
+            const hallTicketUpper = (student.hall_ticket || '').toUpperCase()
+            
+            // Prioritize results that start with the query
+            const nameStartsWith = nameUpper.startsWith(queryUpper)
+            const hallTicketStartsWith = hallTicketUpper.startsWith(queryUpper)
+            
+            return nameStartsWith || hallTicketStartsWith || 
+                   nameUpper.includes(queryUpper) || 
+                   hallTicketUpper.includes(queryUpper)
+          })
+          
+          if (filteredResults.length > 0) {
+            searchResults = filteredResults
+            currentStrategy = 'filtered-broad-search'
+          } else {
+            searchResults = result.data
+            currentStrategy = 'broad-search'
+          }
+          searchError = result.error
+          console.log('✅ Found broad search matches')
+        }
       }
       
       if (searchError) {
@@ -299,12 +323,39 @@ export default function LoginPage() {
       }
       
       console.log('Auto-search results:', searchResults)
+      console.log('Search strategy used:', currentStrategy)
       
       if (searchResults && searchResults.length > 0) {
-        setSearchResults(searchResults)
+        // Sort results by relevance
+        const sortedResults = searchResults.sort((a: any, b: any) => {
+          const queryUpper = query.trim().toUpperCase()
+          const aName = (a.name || '').toUpperCase()
+          const bName = (b.name || '').toUpperCase()
+          const aHallTicket = (a.hall_ticket || '').toUpperCase()
+          const bHallTicket = (b.hall_ticket || '').toUpperCase()
+          
+          // Exact matches first
+          if (aName === queryUpper || aHallTicket === queryUpper) return -1
+          if (bName === queryUpper || bHallTicket === queryUpper) return 1
+          
+          // Starts with query
+          if (aName.startsWith(queryUpper) || aHallTicket.startsWith(queryUpper)) return -1
+          if (bName.startsWith(queryUpper) || bHallTicket.startsWith(queryUpper)) return 1
+          
+          // Contains query
+          if (aName.includes(queryUpper) || aHallTicket.includes(queryUpper)) return -1
+          if (bName.includes(queryUpper) || bHallTicket.includes(queryUpper)) return 1
+          
+          // Default sort by name
+          return aName.localeCompare(bName)
+        })
+        
+        setSearchResults(sortedResults)
+        setSearchStrategy(currentStrategy)
         setHasSearched(true)
       } else {
         setSearchResults([])
+        setSearchStrategy(currentStrategy)
         setHasSearched(true)
       }
     } catch (error: any) {
@@ -362,9 +413,17 @@ export default function LoginPage() {
           <h1 className="text-5xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-4">
             KMIT VICHAAR
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300">
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-3">
             Find student information instantly
           </p>
+          {/* Important note for new users */}
+          <div className="max-w-md mx-auto p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+              ⚠️ New users and students: Please login to continue. 
+              <br />
+              <span className="text-xs">Don't use parents' mobile number - use your Netra credentials only</span>
+            </p>
+          </div>
         </div>
 
         {/* Search Form */}
@@ -380,7 +439,7 @@ export default function LoginPage() {
               </label>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
-                  {searchQuery.match(/^\d+$/) ? <Hash className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                  {searchQuery.match(/^[A-Z0-9]+$/) ? <Hash className="w-5 h-5" /> : <User className="w-5 h-5" />}
                 </div>
                 <input
                   type="text"
@@ -392,7 +451,11 @@ export default function LoginPage() {
                   autoFocus
                 />
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400">
-                  <Search className="w-5 h-5" />
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  ) : (
+                    <Search className="w-5 h-5" />
+                  )}
                 </div>
               </div>
               
@@ -409,6 +472,15 @@ export default function LoginPage() {
                 <div className="flex items-center justify-center mt-4">
                   <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mr-3"></div>
                   <span className="text-sm text-gray-500 dark:text-gray-400">Type to search...</span>
+                </div>
+              )}
+              
+              {/* Show search status */}
+              {hasSearched && searchResults.length > 0 && (
+                <div className="flex items-center justify-center mt-4">
+                  <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    ✅ Found {searchResults.length} result{searchResults.length === 1 ? '' : 's'}
+                  </div>
                 </div>
               )}
             </div>
@@ -485,7 +557,8 @@ export default function LoginPage() {
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
                       {searchStrategy === 'exact-hall-ticket' && '🎯 Exact Hall Ticket Match'}
                       {searchStrategy === 'partial-hall-ticket' && '🔍 Partial Hall Ticket Match'}
-                      {searchStrategy === 'partial-name' && '👤 Partial Name Match'}
+                      {searchStrategy === 'name-search' && '👤 Name Match'}
+                      {searchStrategy === 'filtered-broad-search' && '🌐 Filtered Broad Search Match'}
                       {searchStrategy === 'broad-search' && '🌐 Broad Search Match'}
                     </span>
                   </div>
