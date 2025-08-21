@@ -202,7 +202,11 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh student profile...');
-             const response = await this.makeRequest<{payload?: {student?: any}}>('/studentmaster/studentprofile/1', {}, true);
+             const studentId = this.getCurrentStudentId();
+       if (!studentId) {
+         throw new Error('No student ID available');
+       }
+       const response = await this.makeRequest<{payload?: {student?: any}}>(`/studentmaster/studentprofile/${studentId}`, {}, true);
       
       if (response && response.payload && response.payload.student) {
         const profile = response.payload.student;
@@ -288,7 +292,11 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh results data...');
-             const response = await this.makeRequest<{payload?: any}>('/ouresults/getcmm/1', {}, true);
+             const studentId = this.getCurrentStudentId();
+       if (!studentId) {
+         throw new Error('No student ID available');
+       }
+       const response = await this.makeRequest<{payload?: any}>(`/ouresults/getcmm/${studentId}`, {}, true);
       
       if (response && response.payload) {
         // Cache the results data
@@ -358,7 +366,11 @@ class OptimizedAPIClient {
   async getInternalResults(): Promise<any> {
     try {
       console.log('🔍 Fetching internal results...');
-             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getInternalResultsbyStudent/1', {}, true);
+             const studentId = this.getCurrentStudentId();
+       if (!studentId) {
+         throw new Error('No student ID available');
+       }
+       const response = await this.makeRequest<{payload?: any}>(`/sanjaya/getInternalResultsbyStudent/${studentId}`, {}, true);
       
       if (response && response.payload) {
         return response;
@@ -375,7 +387,11 @@ class OptimizedAPIClient {
   async getSemesterResults(): Promise<any> {
     try {
       console.log('🔍 Fetching semester results...');
-             const response = await this.makeRequest<{payload?: any}>('/ouresults/getcmm/1', {}, true);
+             const studentId = this.getCurrentStudentId();
+       if (!studentId) {
+         throw new Error('No student ID available');
+       }
+       const response = await this.makeRequest<{payload?: any}>(`/ouresults/getcmm/${studentId}`, {}, true);
       
       if (response && response.payload) {
         return response;
@@ -418,6 +434,23 @@ class OptimizedAPIClient {
       throw new Error('Invalid subject attendance response structure');
     } catch (error) {
       console.error('❌ Failed to fetch subject attendance:', error);
+      throw error;
+    }
+  }
+
+  // 🎯 OPTIMIZED: Get notices count
+  async getNoticesCount(): Promise<any> {
+    try {
+      console.log('🔍 Fetching notices count...');
+      const response = await this.makeRequest<{payload?: any}>('/sanjaya/getUnseenNoticesCountByStudent', {}, true);
+      
+      if (response) {
+        return response;
+      }
+      
+      throw new Error('Invalid notices count response structure');
+    } catch (error) {
+      console.error('❌ Failed to fetch notices count:', error);
       throw error;
     }
   }
@@ -492,6 +525,29 @@ class OptimizedAPIClient {
     }
   }
 
+  // 🎯 Get current student ID from JWT token
+  private getCurrentStudentId(): string | null {
+    try {
+      const kmitStudentId = localStorage.getItem('kmit_student_id');
+      if (kmitStudentId) {
+        return kmitStudentId;
+      }
+      
+      // Try to decode from access token
+      const accessToken = localStorage.getItem('kmit_access_token');
+      if (accessToken) {
+        const payload = accessToken.split('.')[1];
+        const decoded = JSON.parse(atob(payload));
+        return decoded.sub?.toString() || null;
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('Failed to get current student ID:', error);
+      return null;
+    }
+  }
+
   // 🎯 Clear all caches (useful for logout)
   clearCaches(): void {
     cacheManager.clear();
@@ -529,7 +585,7 @@ class OptimizedAPIClient {
 // 🎯 Create and export the optimized API client
 export const optimizedApiClient = new OptimizedAPIClient(
   'https://vichaar-kappa.vercel.app/api',  // Backend URL for login only
-  'https://kmit-api.teleuniv.in'           // KMIT API URL for all data
+  'https://kmit-api.teleuniv.in'           // KMIT API URL - THE MAIN ONE TO USE
 );
 
 // 🎯 Export the class for testing
