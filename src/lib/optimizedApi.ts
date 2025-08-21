@@ -27,13 +27,15 @@ export interface OptimizedStudentData {
 }
 
 class OptimizedAPIClient {
-  private baseURL: string;
+  private backendURL: string;
+  private kmitAPIURL: string;
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private tokenExpiry: number = 0;
 
-  constructor(baseURL: string) {
-    this.baseURL = baseURL;
+  constructor(backendURL: string, kmitAPIURL: string) {
+    this.backendURL = backendURL;
+    this.kmitAPIURL = kmitAPIURL;
     this.loadTokens();
   }
 
@@ -85,9 +87,11 @@ class OptimizedAPIClient {
   // 🎯 Make HTTP request with error handling
   private async makeRequest<T = any>(
     endpoint: string, 
-    options: RequestInit = {}
+    options: RequestInit = {},
+    useKmitAPI: boolean = false
   ): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
+    const baseURL = useKmitAPI ? this.kmitAPIURL : this.backendURL;
+    const url = `${baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -198,7 +202,7 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh student profile...');
-      const response = await this.makeRequest<{payload?: {student?: any}}>('/sanjaya/getStudentProfile');
+             const response = await this.makeRequest<{payload?: {student?: any}}>('/sanjaya/getStudentProfile', {}, true);
       
       if (response && response.payload && response.payload.student) {
         const profile = response.payload.student;
@@ -231,7 +235,7 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh attendance data...');
-      const response = await this.makeRequest<{payload?: any}>('/sanjaya/getAttendance');
+             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getAttendance', {}, true);
       
       if (response && response.payload) {
         // Cache the attendance data
@@ -284,7 +288,7 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh results data...');
-      const response = await this.makeRequest<{payload?: any}>('/sanjaya/getResults');
+             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getResults', {}, true);
       
       if (response && response.payload) {
         // Cache the results data
@@ -354,9 +358,9 @@ class OptimizedAPIClient {
   async getInternalResults(): Promise<any> {
     try {
       console.log('🔍 Fetching internal results...');
-      const response = await this.makeRequest<{success?: boolean; data?: any}>('/sanjaya/getInternalResults');
+             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getInternalResults', {}, true);
       
-      if (response && response.success) {
+      if (response && response.payload) {
         return response;
       }
       
@@ -371,9 +375,9 @@ class OptimizedAPIClient {
   async getSemesterResults(): Promise<any> {
     try {
       console.log('🔍 Fetching semester results...');
-      const response = await this.makeRequest<{success?: boolean; data?: any}>('/sanjaya/getSemesterResults');
+             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getSemesterResults', {}, true);
       
-      if (response && response.success) {
+      if (response && response.payload) {
         return response;
       }
       
@@ -388,9 +392,9 @@ class OptimizedAPIClient {
   async getTimetable(): Promise<any> {
     try {
       console.log('🔍 Fetching timetable...');
-      const response = await this.makeRequest<{success?: boolean; data?: any}>('/sanjaya/getTimetable');
+             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getTimetable', {}, true);
       
-      if (response && response.success) {
+      if (response && response.payload) {
         return response;
       }
       
@@ -405,9 +409,9 @@ class OptimizedAPIClient {
   async getSubjectAttendance(): Promise<any> {
     try {
       console.log('🔍 Fetching subject attendance...');
-      const response = await this.makeRequest<{success?: boolean; data?: any}>('/sanjaya/getSubjectAttendance');
+             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getSubjectAttendance', {}, true);
       
-      if (response && response.success) {
+      if (response && response.payload) {
         return response;
       }
       
@@ -524,7 +528,8 @@ class OptimizedAPIClient {
 
 // 🎯 Create and export the optimized API client
 export const optimizedApiClient = new OptimizedAPIClient(
-  'https://vichaar-kappa.vercel.app/api'
+  'https://vichaar-kappa.vercel.app/api',  // Backend URL for login
+  'https://kmit-api.teleuniv.in'           // KMIT API URL for data
 );
 
 // 🎯 Export the class for testing
