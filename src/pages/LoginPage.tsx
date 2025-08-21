@@ -198,19 +198,26 @@ export default function LoginPage() {
       
       console.log('🎯 Student selected:', student)
       
-      // Get credentials for this student
-      const { data: credentials, error: credError } = await supabaseDB.getCredentials(student.mobile_number)
-      
-      if (credError || !credentials) {
-        console.error('Failed to get credentials:', credError)
-        toast.error('Student found but login failed. Please try again.')
-        return
+      // Get credentials for this student from our backend instead of direct Supabase
+      try {
+        const response = await fetch(`https://vichaar-kappa.vercel.app/api/student-credentials?mobile_number=${student.mobile_number}`)
+        const result = await response.json()
+        
+        if (!result.success || !result.data) {
+          console.error('Failed to get credentials:', result.error)
+          toast.error('Student found but login failed. Please try again.')
+          return
+        }
+        
+        const credentials = result.data
+        console.log('Got credentials for:', student.mobile_number)
+        
+        // Now automatically login to KMIT API using stored credentials + captcha
+        await autoLoginToKMIT(credentials.mobile_number, credentials.password, student)
+      } catch (error) {
+        console.error('Failed to get credentials:', error)
+        toast.error('Failed to get student credentials. Please try again.')
       }
-
-      console.log('Got credentials for:', student.mobile_number)
-      
-      // Now automatically login to KMIT API using stored credentials + captcha
-      await autoLoginToKMIT(credentials.mobile_number, credentials.password, student)
       
     } catch (error: any) {
       console.error('Student selection error:', error)
@@ -258,68 +265,92 @@ export default function LoginPage() {
       // Strategy 1: Try exact hall ticket match first (fastest and most accurate)
       if (/^[A-Z0-9]+$/.test(query.trim())) {
         console.log('🔍 Fast search by exact hall ticket:', query.trim())
-        const result = await supabaseDB.searchByHallTicket(query.trim())
-        searchResults = result.data
-        searchError = result.error
-        if (searchResults && searchResults.length > 0) {
-          console.log('✅ Found exact hall ticket match')
-          currentStrategy = 'exact-hall-ticket'
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(query.trim())}&type=exact`)
+          const result = await response.json()
+          if (result.success && result.data) {
+            searchResults = result.data
+            searchError = null
+            console.log('✅ Found exact hall ticket match')
+            currentStrategy = 'exact-hall-ticket'
+          }
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
       // Strategy 2: If no results, try partial hall ticket search
       if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
         console.log('🔍 Partial hall ticket search:', query.trim())
-        const result = await supabaseDB.searchByPartialHallTicket(query.trim())
-        if (result.data && result.data.length > 0) {
-          searchResults = result.data
-          searchError = result.error
-          console.log('✅ Found partial hall ticket matches')
-          currentStrategy = 'partial-hall-ticket'
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(query.trim())}&type=partial`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            searchResults = result.data
+            searchError = null
+            console.log('✅ Found partial hall ticket matches')
+            currentStrategy = 'partial-hall-ticket'
+          }
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
       // Strategy 3: If still no results, try improved name search
       if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
         console.log('🔍 Improved name search:', query.trim())
-        const result = await supabaseDB.searchByName(query.trim())
-        if (result.data && result.data.length > 0) {
-          searchResults = result.data
-          searchError = result.error
-          console.log('✅ Found name matches')
-          currentStrategy = 'name-search'
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(query.trim())}&type=name`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            searchResults = result.data
+            searchError = null
+            console.log('✅ Found name matches')
+            currentStrategy = 'name-search'
+          }
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
       // Strategy 4: If still no results, try broader search with better filtering
       if (!searchResults || searchResults.length === 0) {
         console.log('🔍 Broad search with filtering:', query.trim())
-        const result = await supabaseDB.searchStudent(query.trim())
-        if (result.data && result.data.length > 0) {
-          // Filter results to prioritize better matches
-          const filteredResults = result.data.filter((student: any) => {
-            const queryUpper = query.trim().toUpperCase()
-            const nameUpper = (student.name || '').toUpperCase()
-            const hallTicketUpper = (student.hall_ticket || '').toUpperCase()
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(query.trim())}&type=broad`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            // Filter results to prioritize better matches
+            const filteredResults = result.data.filter((student: any) => {
+              const queryUpper = query.trim().toUpperCase()
+              const nameUpper = (student.name || '').toUpperCase()
+              const hallTicketUpper = (student.hall_ticket || '').toUpperCase()
+              
+              // Prioritize results that start with the query
+              const nameStartsWith = nameUpper.startsWith(queryUpper)
+              const hallTicketStartsWith = hallTicketUpper.startsWith(queryUpper)
+              
+              return nameStartsWith || hallTicketStartsWith || 
+                     nameUpper.includes(queryUpper) || 
+                     hallTicketUpper.includes(queryUpper)
+            })
             
-            // Prioritize results that start with the query
-            const nameStartsWith = nameUpper.startsWith(queryUpper)
-            const hallTicketStartsWith = hallTicketUpper.startsWith(queryUpper)
-            
-            return nameStartsWith || hallTicketStartsWith || 
-                   nameUpper.includes(queryUpper) || 
-                   hallTicketUpper.includes(queryUpper)
-          })
-          
-          if (filteredResults.length > 0) {
-            searchResults = filteredResults
-            currentStrategy = 'filtered-broad-search'
-          } else {
-            searchResults = result.data
-            currentStrategy = 'broad-search'
+            if (filteredResults.length > 0) {
+              searchResults = filteredResults
+              currentStrategy = 'filtered-broad-search'
+            } else {
+              searchResults = result.data
+              currentStrategy = 'broad-search'
+            }
+            searchError = null
+            console.log('✅ Found broad search matches')
           }
-          searchError = result.error
-          console.log('✅ Found broad search matches')
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       

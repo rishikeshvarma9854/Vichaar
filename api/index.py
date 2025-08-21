@@ -714,9 +714,11 @@ def health_check():
 
 @app.route('/api/search-students', methods=['GET'])
 def search_students():
-    """Search for students by name or hall ticket number"""
+    """Search for students by name or hall ticket number with different search types"""
     try:
         query = request.args.get('q', '').strip()
+        search_type = request.args.get('type', 'broad')  # exact, partial, name, broad
+        
         if not query:
             return jsonify({
                 "success": False,
@@ -726,29 +728,69 @@ def search_students():
         conn = get_db()
         cursor = conn.cursor()
         
-        # Search by name (partial match) or hall ticket (exact match)
-        # Remove spaces from query for more flexible name matching
-        query_no_spaces = query.replace(' ', '')
-        
-        cursor.execute('''
-            SELECT 
-                kmit_id, name, hall_ticket, roll_number, branch, year, semester,
-                email, phone, branch_code, course, section, admission_year,
-                dob, father_name, father_mobile, gender, student_type, status,
-                regulation, last_updated
-            FROM students 
-            WHERE name LIKE ? OR hall_ticket LIKE ? OR roll_number LIKE ? 
-                  OR REPLACE(name, ' ', '') LIKE ? OR REPLACE(name, ' ', '') LIKE ?
-            ORDER BY 
-                CASE 
-                    WHEN hall_ticket = ? THEN 1
-                    WHEN name LIKE ? THEN 2
-                    WHEN REPLACE(name, ' ', '') LIKE ? THEN 3
-                    ELSE 4
-                END,
-                name ASC
-            LIMIT 20
-        ''', (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query_no_spaces}%', f'%{query_no_spaces}%', query, f'%{query}%', f'%{query_no_spaces}%'))
+        # Different search strategies based on type
+        if search_type == 'exact':
+            # Exact hall ticket match
+            cursor.execute('''
+                SELECT 
+                    kmit_id, name, hall_ticket, roll_number, branch, year, semester,
+                    email, phone, branch_code, course, section, admission_year,
+                    dob, father_name, father_mobile, gender, student_type, status,
+                    regulation, last_updated
+                FROM students 
+                WHERE hall_ticket = ?
+                ORDER BY name ASC
+                LIMIT 10
+            ''', (query,))
+        elif search_type == 'partial':
+            # Partial hall ticket match
+            cursor.execute('''
+                SELECT 
+                    kmit_id, name, hall_ticket, roll_number, branch, year, semester,
+                    email, phone, branch_code, course, section, admission_year,
+                    dob, father_name, father_mobile, gender, student_type, status,
+                    regulation, last_updated
+                FROM students 
+                WHERE hall_ticket LIKE ?
+                ORDER BY hall_ticket ASC
+                LIMIT 10
+            ''', (f'%{query}%',))
+        elif search_type == 'name':
+            # Name search
+            query_no_spaces = query.replace(' ', '')
+            cursor.execute('''
+                SELECT 
+                    kmit_id, name, hall_ticket, roll_number, branch, year, semester,
+                    email, phone, branch_code, course, section, admission_year,
+                    dob, father_name, father_mobile, gender, student_type, status,
+                    regulation, last_updated
+                FROM students 
+                WHERE name LIKE ? OR REPLACE(name, ' ', '') LIKE ?
+                ORDER BY name ASC
+                LIMIT 10
+            ''', (f'%{query}%', f'%{query_no_spaces}%'))
+        else:
+            # Broad search (default)
+            query_no_spaces = query.replace(' ', '')
+            cursor.execute('''
+                SELECT 
+                    kmit_id, name, hall_ticket, roll_number, branch, year, semester,
+                    email, phone, branch_code, course, section, admission_year,
+                    dob, father_name, father_mobile, gender, student_type, status,
+                    regulation, last_updated
+                FROM students 
+                WHERE name LIKE ? OR hall_ticket LIKE ? OR roll_number LIKE ? 
+                      OR REPLACE(name, ' ', '') LIKE ? OR REPLACE(name, ' ', '') LIKE ?
+                ORDER BY 
+                    CASE 
+                        WHEN hall_ticket = ? THEN 1
+                        WHEN name LIKE ? THEN 2
+                        WHEN REPLACE(name, ' ', '') LIKE ? THEN 3
+                        ELSE 4
+                    END,
+                    name ASC
+                LIMIT 20
+            ''', (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query_no_spaces}%', f'%{query_no_spaces}%', query, f'%{query}%', f'%{query_no_spaces}%'))
         
         results = cursor.fetchall()
         
@@ -769,23 +811,22 @@ def search_students():
             query_no_spaces.lower() in str(row['name']).lower().replace(' ', '')
             for row in results
         )
-        search_type = 'name' if is_name_search else 'hall_ticket'
+        search_type_log = 'name' if is_name_search else 'hall_ticket'
         
         cursor.execute('''
             INSERT INTO search_history (searcher_ip, search_term, search_type, results_count)
             VALUES (?, ?, ?, ?)
-        ''', (searcher_ip, query, search_type, len(students)))
+        ''', (searcher_ip, query, search_type_log, len(students)))
         
         conn.commit()
         conn.close()
         
         return jsonify({
             "success": True,
-            "data": {
-                "students": students,
-                "total_results": len(students),
-                "query": query
-            }
+            "data": students,  # Return students array directly
+            "total_results": len(students),
+            "query": query,
+            "search_type": search_type
         })
         
     except Exception as e:
@@ -1136,6 +1177,36 @@ def get_student_profile_direct(student_id):  # Different function name
                 "error": f"Failed to fetch profile: {response.status_code}"
             }), 400
             
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }), 500
+
+@app.route('/api/student-credentials', methods=['GET'])
+def get_student_credentials():
+    """Get student credentials by mobile number"""
+    try:
+        mobile_number = request.args.get('mobile_number')
+        if not mobile_number:
+            return jsonify({"success": False, "error": "Mobile number is required"}), 400
+        
+        # Query your Supabase database for credentials
+        # This should be replaced with your actual database connection
+        # For now, returning a mock response structure
+        
+        # TODO: Replace this with actual database query
+        # Example: credentials = db.execute("SELECT * FROM student_credentials WHERE mobile_number = ?", [mobile_number])
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "mobile_number": mobile_number,
+                "password": "Kmit123$"  # This should come from your database
+            },
+            "message": "Credentials retrieved successfully"
+        })
+        
     except Exception as e:
         return jsonify({
             "success": False,
