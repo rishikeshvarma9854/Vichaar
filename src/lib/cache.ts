@@ -269,6 +269,26 @@ export const resultsCache = {
   }
 };
 
+export const timetableCache = {
+  key: (mobileNumber: string) => `cache_timetable_${mobileNumber}`,
+  ttl: 12 * 60 * 60 * 1000, // 12 hours
+  set: <T>(mobileNumber: string, data: T) => {
+    const cache = CacheManager.getInstance();
+    cache.set(timetableCache.key(mobileNumber), data, { 
+      ttl: timetableCache.ttl,
+      compress: true 
+    });
+  },
+  get: <T>(mobileNumber: string): T | null => {
+    const cache = CacheManager.getInstance();
+    return cache.get(timetableCache.key(mobileNumber));
+  },
+  has: (mobileNumber: string): boolean => {
+    const cache = CacheManager.getInstance();
+    return cache.has(timetableCache.key(mobileNumber));
+  }
+};
+
 // 🎯 Export the main cache manager
 export const cacheManager = CacheManager.getInstance();
 

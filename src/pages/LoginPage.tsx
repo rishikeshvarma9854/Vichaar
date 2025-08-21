@@ -127,7 +127,6 @@ export default function LoginPage() {
       const result = await optimizedApiClient.loginWithFullData(
         mobileNumber,
         password,
-        'netra', // Use 'netra' as in the original code
         captchaToken
       )
       

@@ -14,7 +14,6 @@ import {
   Zap
 } from 'lucide-react';
 import { getCacheStats } from '@/lib/cache';
-import { getApiCacheStats } from '@/lib/optimizedApi';
 
 interface EgressData {
   current: number;
@@ -63,19 +62,14 @@ export default function EgressMonitor() {
   // 🎯 Update cache statistics
   const updateCacheStats = () => {
     try {
-      const basicStats = getCacheStats();
-      const apiStats = getApiCacheStats();
+      const stats = getCacheStats();
       
-      const totalValid = basicStats.valid + (apiStats?.valid || 0);
-      const totalExpired = basicStats.expired + (apiStats?.expired || 0);
-      const total = totalValid + totalExpired;
-      
-      const hitRate = total > 0 ? (totalValid / total) * 100 : 0;
+      const hitRate = stats.total > 0 ? (stats.valid / stats.total) * 100 : 0;
       
       setCacheStats({
-        total,
-        expired: totalExpired,
-        valid: totalValid,
+        total: stats.total,
+        expired: stats.expired,
+        valid: stats.valid,
         hitRate: Math.round(hitRate)
       });
     } catch (error) {

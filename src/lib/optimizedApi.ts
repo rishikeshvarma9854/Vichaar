@@ -2,255 +2,135 @@
 // This consolidates multiple API calls and implements smart caching
 
 import { 
+  cacheManager, 
   studentProfileCache, 
   attendanceCache, 
   resultsCache,
-  cacheManager 
+  timetableCache
 } from './cache';
 
-export interface OptimizedLoginResponse {
-  success: boolean;
-  data?: {
-    login: any;
-    profile: any;
-    basicAttendance?: any;
-    basicResults?: any;
-  };
-  error?: string;
-}
-
-export interface OptimizedStudentData {
-  profile: any;
-  attendance: any;
-  results: any;
-  timetable?: any;
-}
-
+// 🎯 Keep EXACT same API structure, just add caching
 class OptimizedAPIClient {
-  private backendURL: string;
-  private kmitAPIURL: string;
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
-  private tokenExpiry: number = 0;
+  private baseURL: string;
 
-  constructor(backendURL: string, kmitAPIURL: string) {
-    this.backendURL = backendURL;
-    this.kmitAPIURL = kmitAPIURL;
-    this.loadTokens();
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
   }
 
-  // 🎯 Load tokens from localStorage
-  private loadTokens(): void {
-    try {
-      this.accessToken = localStorage.getItem('kmit_access_token');
-      this.refreshToken = localStorage.getItem('kmit_refresh_token');
-      const expiry = localStorage.getItem('kmit_token_expiry');
-      this.tokenExpiry = expiry ? parseInt(expiry) : 0;
-    } catch (error) {
-      console.warn('Failed to load tokens:', error);
-    }
-  }
-
-  // 🎯 Save tokens to localStorage
-  private saveTokens(accessToken: string, refreshToken: string, expiry: number): void {
-    try {
-      localStorage.setItem('kmit_access_token', accessToken);
-      localStorage.setItem('kmit_refresh_token', refreshToken);
-      localStorage.setItem('kmit_token_expiry', expiry.toString());
-      
-      this.accessToken = accessToken;
-      this.refreshToken = refreshToken;
-      this.tokenExpiry = expiry;
-    } catch (error) {
-      console.warn('Failed to save tokens:', error);
-    }
-  }
-
-  // 🎯 Check if token is valid
-  private isTokenValid(): boolean {
-    return Boolean(this.accessToken) && Date.now() < this.tokenExpiry;
-  }
-
-  // 🎯 Get auth headers
-  private getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
-    return headers;
-  }
-
-  // 🎯 Make HTTP request with error handling
-  private async makeRequest<T = any>(
-    endpoint: string, 
-    options: RequestInit = {},
-    useKmitAPI: boolean = false
-  ): Promise<T> {
-    const baseURL = useKmitAPI ? this.kmitAPIURL : this.backendURL;
-    const url = `${baseURL}${endpoint}`;
+  // 🎯 Make request with caching
+  private async makeRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
         ...options,
         headers: {
-          ...this.getAuthHeaders(),
+          'Content-Type': 'application/json',
           ...options.headers,
         },
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      console.error(`❌ API request failed for ${endpoint}:`, error);
       throw error;
     }
   }
 
-  // 🎯 OPTIMIZED: Single login call that returns comprehensive data
-  async loginWithFullData(
-    username: string, 
-    password: string, 
-    application: string, 
-    token: string
-  ): Promise<OptimizedLoginResponse> {
+  // 🎯 LOGIN - Keep exact same as your backend
+  async loginWithFullData(mobileNumber: string, password: string, hcaptchaToken: string): Promise<any> {
     try {
-      console.log('🚀 Performing optimized login with full data fetch...');
-      
-      // Step 1: Perform login
-      const loginResponse = await this.makeRequest<{success: boolean; data?: any; error?: string}>('/login-with-token', {
+      const response = await this.makeRequest('/login-with-token', {
         method: 'POST',
-        body: JSON.stringify({ username, password, application, token }),
+        body: JSON.stringify({
+          mobile_number: mobileNumber,
+          password: password,
+          hcaptcha_token: hcaptchaToken,
+          application: 'netra'
+        })
       });
 
-      if (!loginResponse.success) {
-        return { 
-          success: false, 
-          error: loginResponse.error || 'Login failed' 
-        };
+      if (response.success && response.data?.login) {
+        // Store tokens
+        localStorage.setItem('kmit_access_token', response.data.login.access_token);
+        localStorage.setItem('kmit_refresh_token', response.data.login.refresh_token);
+        localStorage.setItem('kmit_student_id', response.data.login.sub);
       }
 
-      const kmitData = loginResponse.data;
-      
-      // Save tokens
-      this.saveTokens(
-        kmitData.access_token,
-        kmitData.refresh_token,
-        Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-      );
-
-      // Step 2: Fetch profile (this is usually needed immediately)
-      let profile = null;
-      try {
-        profile = await this.getStudentProfile();
-        console.log('✅ Profile fetched during login');
-      } catch (error) {
-        console.warn('⚠️ Profile fetch failed during login, will retry later');
-      }
-
-      // Step 3: Fetch basic attendance (cached, minimal data)
-      let basicAttendance = null;
-      try {
-        basicAttendance = await this.getBasicAttendance();
-        console.log('✅ Basic attendance fetched during login');
-      } catch (error) {
-        console.warn('⚠️ Basic attendance fetch failed during login');
-      }
-
-      // Step 4: Fetch basic results (cached, minimal data)
-      let basicResults = null;
-      try {
-        basicResults = await this.getBasicResults();
-        console.log('✅ Basic results fetched during login');
-      } catch (error) {
-        console.warn('⚠️ Basic results fetch failed during login');
-      }
-
-      return {
-        success: true,
-        data: {
-          login: kmitData,
-          profile,
-          basicAttendance,
-          basicResults,
-        },
-      };
-
+      return response;
     } catch (error) {
-      console.error('❌ Optimized login failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Login failed',
-      };
+      console.error('❌ Login failed:', error);
+      throw error;
     }
   }
 
-  // 🎯 OPTIMIZED: Get student profile with caching
+  // 🎯 STUDENT PROFILE - Keep exact same route
   async getStudentProfile(): Promise<any> {
-    // Check cache first
     const mobileNumber = this.getCurrentUserMobile();
-    if (mobileNumber && studentProfileCache.has(mobileNumber)) {
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
+    // Check cache first
+    const cached = studentProfileCache.get(mobileNumber);
+    if (cached) {
       console.log('🎯 Returning cached student profile');
-      return studentProfileCache.get(mobileNumber);
+      return cached;
     }
 
     try {
       console.log('🔍 Fetching fresh student profile...');
-             const studentId = this.getCurrentStudentId();
-       if (!studentId) {
-         throw new Error('No student ID available');
-       }
-       const response = await this.makeRequest<{payload?: {student?: any}}>(`/studentmaster/studentprofile/${studentId}`, {}, true);
-      
-      if (response && response.payload && response.payload.student) {
-        const profile = response.payload.student;
-        
-        // Cache the profile
-        if (mobileNumber) {
-          studentProfileCache.set(mobileNumber, profile);
-          console.log('💾 Cached student profile');
+      const response = await this.makeRequest('/student-profile/1', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
         }
-        
+      });
+
+      if (response && response.payload && response.payload.student) {
+        // Cache the profile
+        studentProfileCache.set(mobileNumber, response);
         return response;
       }
-      
-      throw new Error('Invalid profile response structure');
+
+      throw new Error('Invalid student profile response structure');
     } catch (error) {
       console.error('❌ Failed to fetch student profile:', error);
       throw error;
     }
   }
 
-  // 🎯 OPTIMIZED: Get attendance with caching and minimal data
+  // 🎯 ATTENDANCE - Keep exact same route
   async getAttendance(): Promise<any> {
     const mobileNumber = this.getCurrentUserMobile();
-    
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
     // Check cache first
-    if (mobileNumber && attendanceCache.has(mobileNumber)) {
+    const cached = attendanceCache.get(mobileNumber);
+    if (cached) {
       console.log('🎯 Returning cached attendance data');
-      return attendanceCache.get(mobileNumber);
+      return cached;
     }
 
     try {
       console.log('🔍 Fetching fresh attendance data...');
-             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getAttendance', {}, true);
-      
+      const response = await this.makeRequest('/attendance', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response && response.payload) {
         // Cache the attendance data
-        if (mobileNumber) {
-          attendanceCache.set(mobileNumber, response);
-          console.log('💾 Cached attendance data');
-        }
-        
+        attendanceCache.set(mobileNumber, response);
         return response;
       }
-      
+
       throw new Error('Invalid attendance response structure');
     } catch (error) {
       console.error('❌ Failed to fetch attendance:', error);
@@ -258,56 +138,34 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 OPTIMIZED: Get basic attendance (minimal data for dashboard)
-  async getBasicAttendance(): Promise<any> {
-    const mobileNumber = this.getCurrentUserMobile();
-    
-    // Check cache first
-    if (mobileNumber && attendanceCache.has(mobileNumber)) {
-      const cached = attendanceCache.get(mobileNumber);
-      if (cached) {
-        // Return minimal data for dashboard
-        return this.extractBasicAttendanceData(cached);
-      }
-    }
-
-    try {
-      const fullAttendance = await this.getAttendance();
-      return this.extractBasicAttendanceData(fullAttendance);
-    } catch (error) {
-      console.error('❌ Failed to get basic attendance:', error);
-      return null;
-    }
-  }
-
-  // 🎯 OPTIMIZED: Get results with caching
+  // 🎯 RESULTS - Keep exact same route
   async getResults(): Promise<any> {
     const mobileNumber = this.getCurrentUserMobile();
-    
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
     // Check cache first
-    if (mobileNumber && resultsCache.has(mobileNumber)) {
+    const cached = resultsCache.get(mobileNumber);
+    if (cached) {
       console.log('🎯 Returning cached results data');
-      return resultsCache.get(mobileNumber);
+      return cached;
     }
 
     try {
       console.log('🔍 Fetching fresh results data...');
-             const studentId = this.getCurrentStudentId();
-       if (!studentId) {
-         throw new Error('No student ID available');
-       }
-       const response = await this.makeRequest<{payload?: any}>(`/ouresults/getcmm/${studentId}`, {}, true);
-      
+      const response = await this.makeRequest('/results/1', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response && response.payload) {
         // Cache the results data
-        if (mobileNumber) {
-          resultsCache.set(mobileNumber, response);
-          console.log('💾 Cached results data');
-        }
-        
+        resultsCache.set(mobileNumber, response);
         return response;
       }
-      
+
       throw new Error('Invalid results response structure');
     } catch (error) {
       console.error('❌ Failed to fetch results:', error);
@@ -315,67 +173,32 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 OPTIMIZED: Get basic results (minimal data for dashboard)
-  async getBasicResults(): Promise<any> {
-    const mobileNumber = this.getCurrentUserMobile();
-    
-    // Check cache first
-    if (mobileNumber && resultsCache.has(mobileNumber)) {
-      const cached = resultsCache.get(mobileNumber);
-      if (cached) {
-        // Return minimal data for dashboard
-        return this.extractBasicResultsData(cached);
-      }
-    }
-
-    try {
-      const fullResults = await this.getResults();
-      return this.extractBasicResultsData(fullResults);
-    } catch (error) {
-      console.error('❌ Failed to get basic results:', error);
-      return null;
-    }
-  }
-
-  // 🎯 OPTIMIZED: Get comprehensive student data in single request
-  async getComprehensiveStudentData(): Promise<OptimizedStudentData> {
-    const mobileNumber = this.getCurrentUserMobile();
-    
-    try {
-      console.log('🚀 Fetching comprehensive student data...');
-      
-      // Use cached data where possible, fetch fresh where needed
-      const [profile, attendance, results] = await Promise.allSettled([
-        this.getStudentProfile(),
-        this.getAttendance(),
-        this.getResults(),
-      ]);
-
-      return {
-        profile: profile.status === 'fulfilled' ? profile.value : null,
-        attendance: attendance.status === 'fulfilled' ? attendance.value : null,
-        results: results.status === 'fulfilled' ? results.value : null,
-      };
-    } catch (error) {
-      console.error('❌ Failed to get comprehensive student data:', error);
-      throw error;
-    }
-  }
-
-  // 🎯 OPTIMIZED: Get internal results with caching
+  // 🎯 INTERNAL RESULTS - Keep exact same route
   async getInternalResults(): Promise<any> {
+    const mobileNumber = this.getCurrentUserMobile();
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
+    // Check cache first
+    const cached = resultsCache.get(mobileNumber);
+    if (cached) {
+      console.log('🎯 Returning cached internal results');
+      return cached;
+    }
+
     try {
       console.log('🔍 Fetching internal results...');
-             const studentId = this.getCurrentStudentId();
-       if (!studentId) {
-         throw new Error('No student ID available');
-       }
-       const response = await this.makeRequest<{payload?: any}>(`/sanjaya/getInternalResultsbyStudent/${studentId}`, {}, true);
-      
+      const response = await this.makeRequest('/internal-results', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response && response.payload) {
         return response;
       }
-      
+
       throw new Error('Invalid internal results response structure');
     } catch (error) {
       console.error('❌ Failed to fetch internal results:', error);
@@ -383,20 +206,32 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 OPTIMIZED: Get semester results with caching
+  // 🎯 SEMESTER RESULTS - Keep exact same route
   async getSemesterResults(): Promise<any> {
+    const mobileNumber = this.getCurrentUserMobile();
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
+    // Check cache first
+    const cached = resultsCache.get(mobileNumber);
+    if (cached) {
+      console.log('🎯 Returning cached semester results');
+      return cached;
+    }
+
     try {
       console.log('🔍 Fetching semester results...');
-             const studentId = this.getCurrentStudentId();
-       if (!studentId) {
-         throw new Error('No student ID available');
-       }
-       const response = await this.makeRequest<{payload?: any}>(`/ouresults/getcmm/${studentId}`, {}, true);
-      
+      const response = await this.makeRequest('/semester-results', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response && response.payload) {
         return response;
       }
-      
+
       throw new Error('Invalid semester results response structure');
     } catch (error) {
       console.error('❌ Failed to fetch semester results:', error);
@@ -404,16 +239,34 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 OPTIMIZED: Get timetable with caching
+  // 🎯 TIMETABLE - Keep exact same route
   async getTimetable(): Promise<any> {
+    const mobileNumber = this.getCurrentUserMobile();
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
+    // Check cache first
+    const cached = timetableCache.get(mobileNumber);
+    if (cached) {
+      console.log('🎯 Returning cached timetable');
+      return cached;
+    }
+
     try {
-      console.log('🔍 Fetching timetable...');
-             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getTimeTablebyStudent', {}, true);
-      
+      console.log('🔍 Fetching fresh timetable...');
+      const response = await this.makeRequest('/timetable', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response && response.payload) {
+        // Cache the timetable
+        timetableCache.set(mobileNumber, response);
         return response;
       }
-      
+
       throw new Error('Invalid timetable response structure');
     } catch (error) {
       console.error('❌ Failed to fetch timetable:', error);
@@ -421,16 +274,32 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 OPTIMIZED: Get subject attendance with caching
+  // 🎯 SUBJECT ATTENDANCE - Keep exact same route
   async getSubjectAttendance(): Promise<any> {
+    const mobileNumber = this.getCurrentUserMobile();
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
+    // Check cache first
+    const cached = attendanceCache.get(mobileNumber);
+    if (cached) {
+      console.log('🎯 Returning cached subject attendance');
+      return cached;
+    }
+
     try {
       console.log('🔍 Fetching subject attendance...');
-             const response = await this.makeRequest<{payload?: any}>('/sanjaya/getSubjectAttendance', {}, true);
-      
+      const response = await this.makeRequest('/subject-attendance', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response && response.payload) {
         return response;
       }
-      
+
       throw new Error('Invalid subject attendance response structure');
     } catch (error) {
       console.error('❌ Failed to fetch subject attendance:', error);
@@ -438,16 +307,25 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 OPTIMIZED: Get notices count
+  // 🎯 NOTICES COUNT - Keep exact same route
   async getNoticesCount(): Promise<any> {
+    const mobileNumber = this.getCurrentUserMobile();
+    if (!mobileNumber) {
+      throw new Error('No mobile number available');
+    }
+
     try {
       console.log('🔍 Fetching notices count...');
-      const response = await this.makeRequest<{payload?: any}>('/sanjaya/getUnseenNoticesCountByStudent', {}, true);
-      
+      const response = await this.makeRequest('/notices-count', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
+        }
+      });
+
       if (response) {
         return response;
       }
-      
+
       throw new Error('Invalid notices count response structure');
     } catch (error) {
       console.error('❌ Failed to fetch notices count:', error);
@@ -455,47 +333,21 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 Extract minimal attendance data for dashboard
-  private extractBasicAttendanceData(attendanceData: any): any {
-    if (!attendanceData?.payload?.attendanceDetails) {
-      return null;
+  // 🎯 SEARCH STUDENTS - Keep exact same route
+  async searchStudents(query: string): Promise<any> {
+    try {
+      console.log('🔍 Searching students...');
+      const response = await this.makeRequest(`/search-students?q=${encodeURIComponent(query)}`);
+
+      if (response && response.results) {
+        return response;
+      }
+
+      throw new Error('Invalid search response structure');
+    } catch (error) {
+      console.error('❌ Failed to search students:', error);
+      throw error;
     }
-
-    // Extract only essential data for dashboard
-    const basicData = {
-      totalDays: attendanceData.payload.attendanceDetails.length,
-      todayStatus: null,
-      overallPercentage: 0,
-      recentDays: attendanceData.payload.attendanceDetails.slice(0, 5), // Last 5 days only
-    };
-
-    // Find today's entry
-    const todayEntry = attendanceData.payload.attendanceDetails.find(
-      (day: any) => day.date === "Today"
-    );
-    
-    if (todayEntry) {
-      basicData.todayStatus = todayEntry.periods?.map((p: any) => ({
-        period: p.period_no,
-        status: p.status,
-      })) || [];
-    }
-
-    return basicData;
-  }
-
-  // 🎯 Extract minimal results data for dashboard
-  private extractBasicResultsData(resultsData: any): any {
-    if (!resultsData?.payload) {
-      return null;
-    }
-
-    // Extract only essential data for dashboard
-    return {
-      hasResults: true,
-      lastUpdated: resultsData.payload.lastUpdated || new Date().toISOString(),
-      // Add other essential fields as needed
-    };
   }
 
   // 🎯 Get current user mobile number
@@ -525,27 +377,10 @@ class OptimizedAPIClient {
     }
   }
 
-  // 🎯 Get current student ID from JWT token
-  private getCurrentStudentId(): string | null {
-    try {
-      const kmitStudentId = localStorage.getItem('kmit_student_id');
-      if (kmitStudentId) {
-        return kmitStudentId;
-      }
-      
-      // Try to decode from access token
-      const accessToken = localStorage.getItem('kmit_access_token');
-      if (accessToken) {
-        const payload = accessToken.split('.')[1];
-        const decoded = JSON.parse(atob(payload));
-        return decoded.sub?.toString() || null;
-      }
-      
-      return null;
-    } catch (error) {
-      console.warn('Failed to get current student ID:', error);
-      return null;
-    }
+  // 🎯 Check if user is authenticated
+  isAuthenticated(): boolean {
+    const token = localStorage.getItem('kmit_access_token');
+    return Boolean(token);
   }
 
   // 🎯 Clear all caches (useful for logout)
@@ -555,44 +390,10 @@ class OptimizedAPIClient {
   }
 
   // 🎯 Get cache statistics
-  getCacheStats(): any {
+  getCacheStats() {
     return cacheManager.getStats();
-  }
-
-  // 🎯 Check if user is authenticated
-  isAuthenticated(): boolean {
-    return this.isTokenValid();
-  }
-
-  // 🎯 Logout and clear data
-  logout(): void {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.tokenExpiry = 0;
-    
-    // Clear tokens from localStorage
-    localStorage.removeItem('kmit_access_token');
-    localStorage.removeItem('kmit_refresh_token');
-    localStorage.removeItem('kmit_token_expiry');
-    
-    // Clear caches
-    this.clearCaches();
-    
-    console.log('🚪 User logged out, caches cleared');
   }
 }
 
 // 🎯 Create and export the optimized API client
-export const optimizedApiClient = new OptimizedAPIClient(
-  'https://vichaar-kappa.vercel.app/api',  // Backend URL for login only
-  'https://kmit-api.teleuniv.in'           // KMIT API URL - THE MAIN ONE TO USE
-);
-
-// 🎯 Export the class for testing
-export { OptimizedAPIClient };
-
-// 🎯 Utility function to get cache statistics
-export const getApiCacheStats = () => optimizedApiClient.getCacheStats();
-
-// 🎯 Utility function to clear all caches
-export const clearApiCaches = () => optimizedApiClient.clearCaches();
+export const optimizedApiClient = new OptimizedAPIClient('https://vichaar-kappa.vercel.app/api');
