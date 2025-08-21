@@ -123,96 +123,25 @@ cleanup_thread = threading.Thread(target=periodic_cache_cleanup, daemon=True)
 cleanup_thread.start()
 print("🚀 Cache cleanup thread started")
 
-# Database configuration - Use file-based database for Vercel compatibility
-DATABASE = '/tmp/kmit_vichaar.db'  # Temporary file that works on Vercel
+# Database configuration - Use Supabase for actual data
+import os
+from supabase import create_client, Client
 
-def init_db():
-    """Initialize the database with required tables"""
-    try:
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
-        
-        # Create students table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS students (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                kmit_id INTEGER UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                hall_ticket TEXT UNIQUE NOT NULL,
-                roll_number TEXT,
-                branch TEXT,
-                year INTEGER,
-                semester INTEGER,
-                email TEXT,
-                phone TEXT,
-                branch_code TEXT,
-                course TEXT,
-                section TEXT,
-                admission_year INTEGER,
-                dob TEXT,
-                father_name TEXT,
-                father_mobile TEXT,
-                gender TEXT,
-                qr_key TEXT,
-                student_type TEXT,
-                status TEXT,
-                regulation TEXT,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create search_history table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS search_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                searcher_ip TEXT,
-                search_term TEXT NOT NULL,
-                search_type TEXT NOT NULL,
-                results_count INTEGER,
-                searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create user_sessions table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                kmit_id INTEGER NOT NULL,
-                access_token TEXT NOT NULL,
-                refresh_token TEXT NOT NULL,
-                expires_at TIMESTAMP NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (kmit_id) REFERENCES students (kmit_id)
-            )
-        ''')
-        
-        # Insert some sample data for testing
-        cursor.execute('''
-            INSERT OR IGNORE INTO students (kmit_id, name, hall_ticket, branch, year, semester)
-            VALUES 
-            (3293, 'Sample Student', '4Z123456', 'Computer Science', 2, 3),
-            (3294, 'Another Student', '4Z123457', 'Electronics', 2, 3)
-        ''')
-        
-        conn.commit()
-        conn.close()
-        print("Database initialized successfully!")
-    except Exception as e:
-        print(f"Database initialization error: {e}")
+# Supabase configuration
+SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://aqjplgfghbvwwhwvqzjl.supabase.co')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'your-supabase-anon-key')
 
-def get_db():
-    """Get database connection"""
-    try:
-        conn = sqlite3.connect(DATABASE)
-        conn.row_factory = sqlite3.Row  # This enables column access by name
-        return conn
-    except Exception as e:
-        print(f"Database connection error: {e}")
-        return None
+# Initialize Supabase client
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("Supabase client initialized successfully!")
+except Exception as e:
+    print(f"Supabase initialization error: {e}")
+    supabase = None
 
-# Initialize database on startup
-init_db()
+def get_supabase_client():
+    """Get Supabase client"""
+    return supabase
 
 # KMIT API configuration
 KMIT_API_BASE = "https://kmit-api.teleuniv.in"
@@ -740,108 +669,34 @@ def search_students():
                 "error": "Search query is required"
             }), 400
         
-        conn = get_db()
-        if not conn:
+        supabase_client = get_supabase_client()
+        if not supabase_client:
             return jsonify({
                 "success": False,
-                "error": "Database connection failed"
+                "error": "Supabase connection failed"
             }), 500
-        
-        cursor = conn.cursor()
         
         try:
             # Different search strategies based on type
             if search_type == 'exact':
                 # Exact hall ticket match
-                cursor.execute('''
-                    SELECT 
-                        kmit_id, name, hall_ticket, roll_number, branch, year, semester,
-                        email, phone, branch_code, course, section, admission_year,
-                        dob, father_name, father_mobile, gender, student_type, status,
-                        regulation, last_updated
-                    FROM students 
-                    WHERE hall_ticket = ?
-                    ORDER BY name ASC
-                    LIMIT 10
-                ''', (query,))
+                response = supabase_client.table('student_profiles').select('*').eq('hall_ticket', query).limit(10).execute()
             elif search_type == 'partial':
                 # Partial hall ticket match
-                cursor.execute('''
-                    SELECT 
-                        kmit_id, name, hall_ticket, roll_number, branch, year, semester,
-                        email, phone, branch_code, course, section, admission_year,
-                        dob, father_name, father_mobile, gender, student_type, status,
-                        regulation, last_updated
-                    FROM students 
-                    WHERE hall_ticket LIKE ?
-                    ORDER BY hall_ticket ASC
-                    LIMIT 10
-                ''', (f'%{query}%',))
+                response = supabase_client.table('student_profiles').select('*').ilike('hall_ticket', f'%{query}%').limit(10).execute()
             elif search_type == 'name':
                 # Name search
                 query_no_spaces = query.replace(' ', '')
-                cursor.execute('''
-                    SELECT 
-                        kmit_id, name, hall_ticket, roll_number, branch, year, semester,
-                        email, phone, branch_code, course, section, admission_year,
-                        dob, father_name, father_mobile, gender, student_type, status,
-                        regulation, last_updated
-                    FROM students 
-                    WHERE name LIKE ? OR REPLACE(name, ' ', '') LIKE ?
-                    ORDER BY name ASC
-                    LIMIT 10
-                ''', (f'%{query}%', f'%{query_no_spaces}%'))
+                response = supabase_client.table('student_profiles').select('*').or_(f'name.ilike.%{query}%,name.ilike.%{query_no_spaces}%').limit(10).execute()
             else:
                 # Broad search (default)
                 query_no_spaces = query.replace(' ', '')
-                cursor.execute('''
-                    SELECT 
-                        kmit_id, name, hall_ticket, roll_number, branch, year, semester,
-                        email, phone, branch_code, course, section, admission_year,
-                        dob, father_name, father_mobile, gender, student_type, status,
-                        regulation, last_updated
-                    FROM students 
-                    WHERE name LIKE ? OR hall_ticket LIKE ? OR roll_number LIKE ? 
-                          OR REPLACE(name, ' ', '') LIKE ? OR REPLACE(name, ' ', '') LIKE ?
-                    ORDER BY 
-                        CASE 
-                            WHEN hall_ticket = ? THEN 1
-                            WHEN name LIKE ? THEN 2
-                            WHEN REPLACE(name, ' ', '') LIKE ? THEN 3
-                            ELSE 4
-                        END,
-                        name ASC
-                    LIMIT 20
-                ''', (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query_no_spaces}%', f'%{query_no_spaces}%', query, f'%{query}%', f'%{query_no_spaces}%'))
+                response = supabase_client.table('student_profiles').select('*').or_(f'name.ilike.%{query}%,hall_ticket.ilike.%{query}%,roll_number.ilike.%{query}%').limit(20).execute()
             
-            results = cursor.fetchall()
-            
-            # Convert to list of dictionaries
-            students = []
-            for row in results:
-                student = dict(row)
-                # Convert timestamp to readable format
-                if student['last_updated']:
-                    student['last_updated'] = student['last_updated']
-                students.append(student)
-            
-            # Log search history
-            searcher_ip = request.remote_addr
-            # Check if it's a name search (including space-ignoring matches)
-            is_name_search = any(
-                query.lower() in str(row['name']).lower() or 
-                query_no_spaces.lower() in str(row['name']).lower().replace(' ', '')
-                for row in results
-            )
-            search_type_log = 'name' if is_name_search else 'hall_ticket'
-            
-            cursor.execute('''
-                INSERT INTO search_history (searcher_ip, search_term, search_type, results_count)
-                VALUES (?, ?, ?, ?)
-            ''', (searcher_ip, query, search_type_log, len(students)))
-            
-            conn.commit()
-            conn.close()
+            if hasattr(response, 'data'):
+                students = response.data
+            else:
+                students = []
             
             return jsonify({
                 "success": True,
@@ -851,8 +706,7 @@ def search_students():
                 "search_type": search_type
             })
             
-        except sqlite3.Error as db_error:
-            conn.close()
+        except Exception as db_error:
             return jsonify({
                 "success": False,
                 "error": f"Database error: {str(db_error)}"
@@ -1220,21 +1074,25 @@ def get_student_credentials():
         if not mobile_number:
             return jsonify({"success": False, "error": "Mobile number is required"}), 400
         
-        # Query your Supabase database for credentials
-        # This should be replaced with your actual database connection
-        # For now, returning a mock response structure
+        supabase_client = get_supabase_client()
+        if not supabase_client:
+            return jsonify({"success": False, "error": "Supabase connection failed"}), 500
         
-        # TODO: Replace this with actual database query
-        # Example: credentials = db.execute("SELECT * FROM student_credentials WHERE mobile_number = ?", [mobile_number])
+        # Query your actual Supabase database for credentials
+        response = supabase_client.table('student_credentials').select('*').eq('mobile_number', mobile_number).execute()
         
-        return jsonify({
-            "success": True,
-            "data": {
-                "mobile_number": mobile_number,
-                "password": "Kmit123$"  # This should come from your database
-            },
-            "message": "Credentials retrieved successfully"
-        })
+        if hasattr(response, 'data') and response.data:
+            credentials = response.data[0]  # Get first match
+            return jsonify({
+                "success": True,
+                "data": credentials,
+                "message": "Credentials retrieved successfully"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "No credentials found for this mobile number"
+            }), 404
         
     except Exception as e:
         return jsonify({
@@ -1242,69 +1100,31 @@ def get_student_credentials():
             "error": f"Server error: {str(e)}"
         }), 500
 
-@app.route('/api/debug/search/<hall_ticket>', methods=['GET'])
-def debug_search(hall_ticket):
-    """Debug search functionality"""
+@app.route('/api/test-supabase', methods=['GET'])
+def test_supabase():
+    """Test Supabase connectivity"""
     try:
-        conn = get_db()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-        
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) as count FROM students')
-        result = cursor.fetchone()
-        student_count = result['count'] if result else 0
-        
-        cursor.execute('SELECT * FROM students LIMIT 3')
-        sample_students = [dict(row) for row in cursor.fetchall()]
-        
-        conn.close()
-        
-        return jsonify({
-            "message": f"Searching for hall ticket: {hall_ticket}",
-            "timestamp": datetime.now().isoformat(),
-            "database_status": "Connected",
-            "total_students": student_count,
-            "sample_students": sample_students
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/test-db', methods=['GET'])
-def test_database():
-    """Test database connectivity and show sample data"""
-    try:
-        conn = get_db()
-        if not conn:
+        supabase_client = get_supabase_client()
+        if not supabase_client:
             return jsonify({
                 "success": False,
-                "error": "Database connection failed"
+                "error": "Supabase connection failed"
             }), 500
         
-        cursor = conn.cursor()
-        
-        # Test basic operations
-        cursor.execute('SELECT COUNT(*) as count FROM students')
-        result = cursor.fetchone()
-        student_count = result['count'] if result else 0
-        
-        cursor.execute('SELECT name, hall_ticket, branch FROM students LIMIT 5')
-        students = [dict(row) for row in cursor.fetchall()]
-        
-        conn.close()
+        # Test basic connection by getting count of student_profiles
+        response = supabase_client.table('student_profiles').select('*', count='exact').execute()
         
         return jsonify({
             "success": True,
-            "database_status": "Connected",
-            "total_students": student_count,
-            "sample_students": students,
+            "database_status": "Connected to Supabase",
+            "total_students": len(response.data) if hasattr(response, 'data') else 0,
             "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
         return jsonify({
             "success": False,
-            "error": f"Database test failed: {str(e)}"
+            "error": f"Supabase test failed: {str(e)}"
         }), 500
 
 # This is required for Vercel
