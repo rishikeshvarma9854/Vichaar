@@ -75,6 +75,12 @@ class OptimizedAPIClient {
       throw new Error('No mobile number available');
     }
 
+    // Get student ID from JWT token (like original api.ts)
+    const studentId = this.getStudentIdFromToken();
+    if (!studentId) {
+      throw new Error('No student ID available from token');
+    }
+
     // Check cache first
     const cached = studentProfileCache.get(mobileNumber);
     if (cached) {
@@ -84,7 +90,7 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh student profile...');
-      const response = await this.makeRequest('/student-profile/1', {
+      const response = await this.makeRequest(`/student-profile/${studentId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
         }
@@ -145,6 +151,12 @@ class OptimizedAPIClient {
       throw new Error('No mobile number available');
     }
 
+    // Get student ID from JWT token (like original api.ts)
+    const studentId = this.getStudentIdFromToken();
+    if (!studentId) {
+      throw new Error('No student ID available from token');
+    }
+
     // Check cache first
     const cached = resultsCache.get(mobileNumber);
     if (cached) {
@@ -154,7 +166,7 @@ class OptimizedAPIClient {
 
     try {
       console.log('🔍 Fetching fresh results data...');
-      const response = await this.makeRequest('/results/1', {
+      const response = await this.makeRequest(`/results/${studentId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('kmit_access_token')}`
         }
@@ -347,6 +359,34 @@ class OptimizedAPIClient {
     } catch (error) {
       console.error('❌ Failed to search students:', error);
       throw error;
+    }
+  }
+
+  // 🎯 Get student ID from JWT token (like original api.ts)
+  private getStudentIdFromToken(): number | null {
+    try {
+      const token = localStorage.getItem('kmit_access_token');
+      if (!token) {
+        return null;
+      }
+      
+      // Decode JWT token to extract student ID
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      const decoded = JSON.parse(jsonPayload);
+      
+      if (decoded && decoded.sub) {
+        console.log('Extracted studentId from JWT:', decoded.sub);
+        return decoded.sub;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to decode JWT:', error);
+      return null;
     }
   }
 
