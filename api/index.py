@@ -5,6 +5,8 @@ import json
 import sqlite3
 import os
 from datetime import datetime, timedelta
+import hashlib
+import pickle
 
 app = Flask(__name__)
 CORS(app, 
@@ -17,6 +19,109 @@ CORS(app,
      methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
      supports_credentials=False)  # Enable CORS for all routes
+
+# 🚀 CACHING SYSTEM - Reduce Egress & Improve Performance
+# 
+# Cache Strategy:
+# - Student Profile: 5 months (college updates every 5 months)
+# - Timetable: 5 months (college updates every 5 months)  
+# - Results: 12 hours (moderate frequency updates)
+# - Notices: 2 hours (frequent updates)
+# - Search: 1 hour (very frequent)
+# - Attendance: NO CACHING (faculty updates frequently)
+#
+class APICache:
+    def __init__(self):
+        self.cache = {}
+        self.ttl = {
+            'student_profile': 5 * 30 * 24 * 60 * 60,  # 5 months (150 days)
+            'attendance': 0,                             # No caching for attendance (always fresh)
+            'results': 12 * 60 * 60,                    # 12 hours
+            'timetable': 5 * 30 * 24 * 60 * 60,        # 5 months (150 days)
+            'notices': 2 * 60 * 60,                     # 2 hours
+            'search': 1 * 60 * 60                       # 1 hour
+        }
+    
+    def _generate_key(self, endpoint: str, params: dict = None) -> str:
+        """Generate cache key from endpoint and parameters"""
+        key_data = f"{endpoint}"
+        if params:
+            # Sort params for consistent key generation
+            sorted_params = sorted(params.items())
+            key_data += str(sorted_params)
+        return hashlib.md5(key_data.encode()).hexdigest()
+    
+    def get(self, endpoint: str, params: dict = None):
+        """Get cached data if valid"""
+        key = self._generate_key(endpoint, params)
+        if key in self.cache:
+            cached_data = self.cache[key]
+            if datetime.now().timestamp() < cached_data['expires_at']:
+                print(f"🎯 Cache HIT for {endpoint}")
+                return cached_data['data']
+            else:
+                # Expired, remove from cache
+                del self.cache[key]
+                print(f"⏰ Cache EXPIRED for {endpoint}")
+        return None
+    
+    def set(self, endpoint: str, data, cache_type: str = 'default', params: dict = None):
+        """Cache data with appropriate TTL"""
+        key = self._generate_key(endpoint, params)
+        ttl_seconds = self.ttl.get(cache_type, 3600)  # Default 1 hour
+        
+        self.cache[key] = {
+            'data': data,
+            'expires_at': datetime.now().timestamp() + ttl_seconds,
+            'cache_type': cache_type,
+            'cached_at': datetime.now().isoformat()
+        }
+        print(f"💾 Cached {endpoint} ({cache_type}) for {ttl_seconds//3600}h")
+    
+    def clear_expired(self):
+        """Remove expired cache entries"""
+        current_time = datetime.now().timestamp()
+        expired_keys = [key for key, value in self.cache.items() 
+                       if current_time >= value['expires_at']]
+        for key in expired_keys:
+            del self.cache[key]
+        if expired_keys:
+            print(f"🧹 Cleaned {len(expired_keys)} expired cache entries")
+    
+    def get_stats(self):
+        """Get cache statistics"""
+        current_time = datetime.now().timestamp()
+        valid = sum(1 for v in self.cache.values() 
+                   if current_time < v['expires_at'])
+        expired = len(self.cache) - valid
+        return {
+            'total': len(self.cache),
+            'valid': valid,
+            'expired': expired,
+            'hit_rate': f"{(valid/(valid+expired)*100):.1f}%" if (valid+expired) > 0 else "0%"
+        }
+
+# Initialize cache
+api_cache = APICache()
+
+# 🧹 Periodic cache cleanup (every 10 minutes)
+import threading
+import time
+
+def periodic_cache_cleanup():
+    """Clean up expired cache entries every 10 minutes"""
+    while True:
+        try:
+            time.sleep(600)  # 10 minutes
+            api_cache.clear_expired()
+            print(f"🧹 Periodic cache cleanup completed at {datetime.now().isoformat()}")
+        except Exception as e:
+            print(f"❌ Cache cleanup error: {e}")
+
+# Start cache cleanup thread
+cleanup_thread = threading.Thread(target=periodic_cache_cleanup, daemon=True)
+cleanup_thread.start()
+print("🚀 Cache cleanup thread started")
 
 # Database configuration - Use in-memory database for Vercel compatibility
 DATABASE = ':memory:'  # In-memory database that works on Vercel
@@ -98,6 +203,45 @@ init_db()
 KMIT_API_BASE = "https://kmit-api.teleuniv.in"
 
 # Handle CORS preflight requests
+
+# 🎯 Cache statistics endpoint
+@app.route('/api/cache-stats', methods=['GET'])
+def get_cache_stats():
+    """Get cache performance statistics"""
+    try:
+        # Clean up expired entries first
+        api_cache.clear_expired()
+        
+        stats = api_cache.get_stats()
+        return jsonify({
+            "success": True,
+            "data": {
+                "cache_stats": stats,
+                "timestamp": datetime.now().isoformat(),
+                "message": "Cache performance metrics"
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Failed to get cache stats: {str(e)}"
+        }), 500
+
+# 🧹 Cache cleanup endpoint
+@app.route('/api/cache-clear', methods=['POST'])
+def clear_cache():
+    """Clear all cached data"""
+    try:
+        api_cache.cache.clear()
+        return jsonify({
+            "success": True,
+            "message": "All cache cleared successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Failed to clear cache: {str(e)}"
+        }), 500
 @app.route('/<path:path>', methods=['OPTIONS'])
 def handle_options(path):
     """Handle OPTIONS requests for CORS preflight"""
@@ -375,6 +519,9 @@ def get_attendance():
             print(f"Failed to decode JWT: {e}")
             return jsonify({"success": False, "error": "Invalid token"}), 400
         
+        # 🚫 No caching for attendance - always fetch fresh data
+        # (Faculty updates attendance frequently)
+        
         headers = {
             'Authorization': auth_header,
             'Content-Type': 'application/json',
@@ -382,7 +529,7 @@ def get_attendance():
         }
         
         # Now fetch real attendance data using the correct student ID
-        print(f"Fetching attendance for student ID: {student_id}")
+        print(f"🔍 Fetching fresh attendance for student ID: {student_id}")
         attendance_response = requests.get(
             f"{KMIT_API_BASE}/sanjaya/getAttendance",
             headers=headers,
@@ -401,7 +548,8 @@ def get_attendance():
                 return jsonify({
                     "success": True,
                     "data": attendance_data,
-                    "message": "Real attendance data fetched from KMIT"
+                    "message": "Fresh attendance data fetched from KMIT (no caching)",
+                    "cached": False
                 })
             except json.JSONDecodeError:
                 return jsonify({
@@ -442,9 +590,14 @@ def get_notices_count():
         )
         
         if response.status_code == 200:
+            notices_data = response.json()
+            
+            # 💾 Cache the notices data
+            api_cache.set(f"notices_{student_id}", notices_data, 'notices')
+            
             return jsonify({
                 "success": True,
-                "data": response.json()
+                "data": notices_data
             })
         else:
             return jsonify({
@@ -768,9 +921,15 @@ def get_internal_results():
         )
         
         if response.status_code == 200:
+            results_data = response.json()
+            
+            # 💾 Cache the internal results data
+            api_cache.set(f"internal_results_{student_id}", results_data, 'results')
+            
             return jsonify({
                 "success": True,
-                "data": response.json()
+                "data": results_data,
+                "message": "Internal results fetched and cached"
             })
         else:
             print(f"KMIT API error: {response.status_code} - {response.text}")
@@ -831,9 +990,15 @@ def get_semester_results():
         )
         
         if response.status_code == 200:
+            results_data = response.json()
+            
+            # 💾 Cache the semester results data
+            api_cache.set(f"semester_results_{student_id}", results_data, 'results')
+            
             return jsonify({
                 "success": True,
-                "data": response.json()
+                "data": results_data,
+                "message": "Semester results fetched and cached"
             })
         else:
             print(f"KMIT API error: {response.status_code} - {response.text}")
@@ -893,9 +1058,15 @@ def get_timetable():
         )
         
         if response.status_code == 200:
+            timetable_data = response.json()
+            
+            # 💾 Cache the timetable data (5 months TTL)
+            api_cache.set(f"timetable_{student_id}", timetable_data, 'timetable')
+            
             return jsonify({
                 "success": True,
-                "data": response.json()
+                "data": timetable_data,
+                "message": "Timetable fetched and cached"
             })
         else:
             print(f"KMIT API error: {response.status_code} - {response.text}")
@@ -922,12 +1093,25 @@ def get_student_profile_direct(student_id):  # Different function name
         if not auth_header:
             return jsonify({"success": False, "error": "No authorization token"}), 401
         
+        # 🎯 Check cache first
+        cache_key = f"student_profile_{student_id}"
+        cached_data = api_cache.get(cache_key)
+        if cached_data:
+            print(f"🎯 Returning cached profile for student {student_id}")
+            return jsonify({
+                "success": True,
+                "data": cached_data,
+                "message": "Cached student profile",
+                "cached": True
+            })
+        
         headers = {
             'Authorization': auth_header,
             'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
         }
         
+        print(f"🔍 Fetching fresh profile for student ID: {student_id}")
         response = requests.get(
             f"{KMIT_API_BASE}/studentmaster/studentprofile/{student_id}",
             headers=headers,
@@ -935,9 +1119,16 @@ def get_student_profile_direct(student_id):  # Different function name
         )
         
         if response.status_code == 200:
+            profile_data = response.json()
+            
+            # 💾 Cache the profile data
+            api_cache.set(cache_key, profile_data, 'student_profile')
+            
             return jsonify({
                 "success": True,
-                "data": response.json()
+                "data": profile_data,
+                "message": "Fresh student profile",
+                "cached": False
             })
         else:
             return jsonify({
