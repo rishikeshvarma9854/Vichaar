@@ -96,7 +96,7 @@ class OptimizedAPIClient {
         }
       });
 
-      if (response && response.payload && response.payload.student) {
+      if (response && response.data && response.data.payload && response.data.payload.student) {
         // Cache the profile
         studentProfileCache.set(mobileNumber, response);
         return response;
@@ -131,7 +131,7 @@ class OptimizedAPIClient {
         }
       });
 
-      if (response && response.payload) {
+      if (response && response.data && response.data.payload) {
         // Cache the attendance data
         attendanceCache.set(mobileNumber, response);
         return response;
@@ -172,7 +172,7 @@ class OptimizedAPIClient {
         }
       });
 
-      if (response && response.payload) {
+      if (response && response.data && response.data.payload) {
         // Cache the results data
         resultsCache.set(mobileNumber, response);
         return response;
