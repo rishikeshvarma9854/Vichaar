@@ -123,12 +123,9 @@ export default function LoginPage() {
       console.log('Timestamp:', new Date().toISOString());
       console.log('Student Profile:', studentProfile);
       
-      // Extract username from student profile (usually hall ticket number)
-      const username = studentProfile?.htno || studentProfile?.hall_ticket || mobileNumber
-      
-      // Use the new optimized API client for comprehensive login
+      // Use mobile number as username (as expected by the API)
       const result = await optimizedApiClient.loginWithFullData(
-        username,
+        mobileNumber,
         password,
         'netra', // Use 'netra' as in the original code
         captchaToken
