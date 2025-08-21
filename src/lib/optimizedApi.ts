@@ -47,9 +47,9 @@ class OptimizedAPIClient {
       const response = await this.makeRequest('/login-with-token', {
         method: 'POST',
         body: JSON.stringify({
-          mobile_number: mobileNumber,
+          username: mobileNumber,
           password: password,
-          hcaptcha_token: hcaptchaToken,
+          token: hcaptchaToken,
           application: 'netra'
         })
       });
