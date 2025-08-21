@@ -7,7 +7,7 @@ import {
   BarChart3, Clock, QrCode, ArrowLeft, Zap, X, Check, ChevronDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import apiClient from '@/lib/api'
+import { optimizedApiClient } from '@/lib/optimizedApi'
 import { StudentData } from '@/lib/api'
 import { supabaseDB, supabase } from '@/lib/supabase'
 
@@ -199,7 +199,7 @@ export default function DashboardPage() {
 
   // Handle attendance button click
   const handleAttendanceClick = async () => {
-    if (!apiClient.isAuthenticated()) {
+    if (!optimizedApiClient.isAuthenticated()) {
       toast.error('Please login first')
       return
     }
@@ -210,14 +210,12 @@ export default function DashboardPage() {
     // Load fresh attendance data if not already loaded
     if (!attendanceDetails) {
       try {
-        console.log('🔄 Loading fresh attendance data...')
-        const attendanceResponse = await apiClient.getAttendance()
-        if (attendanceResponse.success && attendanceResponse.data?.payload) {
-          setAttendanceDetails(attendanceResponse.data)
-          console.log('✅ Fresh attendance data loaded')
-        }
+        console.log('🔍 Fetching fresh attendance data...')
+        const attendanceData = await optimizedApiClient.getAttendance()
+        setAttendanceDetails(attendanceData)
+        console.log('✅ Attendance data loaded:', attendanceData)
       } catch (error) {
-        console.error('❌ Failed to load fresh attendance data:', error)
+        console.error('❌ Failed to fetch attendance:', error)
         toast.error('Failed to load attendance data')
       }
     }
@@ -225,7 +223,7 @@ export default function DashboardPage() {
 
   // Handle results button click
   const handleResultsClick = async () => {
-    if (!apiClient.isAuthenticated()) {
+    if (!optimizedApiClient.isAuthenticated()) {
       toast.error('Please login first')
       return
     }
@@ -239,14 +237,14 @@ export default function DashboardPage() {
   const loadResultsData = async () => {
     try {
       // Load internal results
-      const internalResponse = await apiClient.getInternalResults()
+      const internalResponse = await optimizedApiClient.getInternalResults()
       if (internalResponse.success && internalResponse.data?.payload) {
         setInternalResults(internalResponse.data.payload)
         console.log('✅ Internal results loaded:', internalResponse.data.payload)
       }
 
       // Load semester results
-      const semesterResponse = await apiClient.getSemesterResults()
+      const semesterResponse = await optimizedApiClient.getSemesterResults()
       if (semesterResponse.success && semesterResponse.data?.payload) {
         setSemesterResults(semesterResponse.data.payload)
         console.log('✅ Semester results loaded:', semesterResponse.data.payload)
@@ -261,7 +259,7 @@ export default function DashboardPage() {
 
   // Handle timetable button click
   const handleTimetableClick = async () => {
-    if (!apiClient.isAuthenticated()) {
+    if (!optimizedApiClient.isAuthenticated()) {
       toast.error('Please login first')
       return
     }
@@ -273,7 +271,7 @@ export default function DashboardPage() {
 
   // Handle Netra QR button click
   const handleNetraQRClick = () => {
-    if (!apiClient.isAuthenticated()) {
+    if (!optimizedApiClient.isAuthenticated()) {
       toast.error('Please login first')
       return
     }
@@ -382,7 +380,7 @@ export default function DashboardPage() {
   // Load timetable data
   const loadTimetableData = async () => {
     try {
-      const timetableResponse = await apiClient.getTimetable()
+      const timetableResponse = await optimizedApiClient.getTimetable()
       if (timetableResponse.success && timetableResponse.data?.payload) {
         setTimetableData(timetableResponse.data.payload)
         
@@ -414,7 +412,7 @@ export default function DashboardPage() {
       
       // Check both context authentication and KMIT API authentication
       const contextAuthenticated = isAuthenticated
-      const kmitAuthenticated = apiClient.isAuthenticated()
+      const kmitAuthenticated = optimizedApiClient.isAuthenticated()
       
       console.log('🔐 Authentication state check:')
       console.log('  - Context isAuthenticated:', contextAuthenticated)
@@ -430,7 +428,7 @@ export default function DashboardPage() {
           try {
             // Fetch student profile
             console.log('🔄 Starting to fetch student profile...')
-            const profile = await apiClient.getStudentProfile()
+            const profile = await optimizedApiClient.getStudentProfile()
             console.log('✅ Student profile API response received:', profile)
             
             if (profile && profile.payload) {
@@ -492,7 +490,7 @@ export default function DashboardPage() {
                 // Now fetch attendance data
                 console.log('🔄 ===== ATTENDANCE DATA LOADING START =====')
                 try {
-                  const attendanceResponse = await apiClient.getAttendance()
+                  const attendanceResponse = await optimizedApiClient.getAttendance()
                   if (attendanceResponse.success && attendanceResponse.data?.payload) {
                     const kmitData = attendanceResponse.data.payload
                     console.log('✅ KMIT attendance data loaded:', kmitData)
@@ -563,7 +561,7 @@ export default function DashboardPage() {
                 // Now fetch subject attendance data
                 console.log('🔄 ===== SUBJECT ATTENDANCE LOADING START =====')
                 try {
-                  const subjectResponse = await apiClient.getSubjectAttendance()
+                  const subjectResponse = await optimizedApiClient.getSubjectAttendance()
                   if (subjectResponse.success) {
                     setSubjectAttendance(subjectResponse.data)
                     console.log('✅ Subject attendance loaded:', subjectResponse.data)

@@ -8,7 +8,11 @@ import DashboardPage from './pages/DashboardPage'
 import SearchPage from './pages/SearchPage'
 import ResultsPage from './pages/ResultsPage'
 import LoadingSpinner from './components/LoadingSpinner'
+<<<<<<< HEAD
 import CacheMonitor from './components/CacheMonitor'
+=======
+import EgressMonitor from './components/EgressMonitor'
+>>>>>>> c150539005628d646e4fac8d283722a09278dcf0
 
 function App() {
   const [isLoading, setIsLoading] = useState(true)
@@ -38,8 +42,13 @@ function App() {
             <Route path="/results" element={<ResultsPage />} />
           </Routes>
           
+<<<<<<< HEAD
           {/* 🎯 Cache Monitor - Shows cache performance and helps reduce egress */}
           <CacheMonitor />
+=======
+          {/* 🚀 Egress Monitor - Track your Supabase usage */}
+          <EgressMonitor />
+>>>>>>> c150539005628d646e4fac8d283722a09278dcf0
         </div>
       </AuthProvider>
     </ThemeProvider>
