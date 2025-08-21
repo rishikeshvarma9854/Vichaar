@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import SearchPage from './pages/SearchPage'
 import ResultsPage from './pages/ResultsPage'
 import LoadingSpinner from './components/LoadingSpinner'
+import EgressMonitor from './components/EgressMonitor'
 
 function App() {
   const [isLoading, setIsLoading] = useState(true)
@@ -36,6 +37,9 @@ function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/results" element={<ResultsPage />} />
           </Routes>
+          
+          {/* 🚀 Egress Monitor - Track your Supabase usage */}
+          <EgressMonitor />
         </div>
       </AuthProvider>
     </ThemeProvider>

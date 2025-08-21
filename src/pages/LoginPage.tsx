@@ -4,7 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { GraduationCap, Moon, Sun, Search, User, Hash, Eye, ArrowRight, Smartphone, Lock, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabaseDB } from '@/lib/supabase'
-import apiClient from '@/lib/api'
+import { optimizedApiClient } from '@/lib/optimizedApi'
 
 // TypeScript declarations for hCaptcha (same as register page)
 declare global {
@@ -123,19 +123,29 @@ export default function LoginPage() {
       console.log('Timestamp:', new Date().toISOString());
       console.log('Student Profile:', studentProfile);
       
-      // Use the EXACT same method as register page
-      const response = await apiClient.loginWithToken(loginPayload)
+      // Extract username from student profile (usually hall ticket number)
+      const username = studentProfile?.htno || studentProfile?.hall_ticket || mobileNumber
       
-      console.log('🔍 API Response:', response);
+      // Use the new optimized API client for comprehensive login
+      const result = await optimizedApiClient.loginWithFullData(
+        username,
+        password,
+        'netra', // Use 'netra' as in the original code
+        captchaToken
+      )
       
-      if (response && !response.Error) {
-        // Login successful - same logic as register page
+      console.log('🔍 API Response:', result);
+      
+      if (result.success) {
+        // Login successful with comprehensive data
         console.log('✅ Auto-login successful!')
         
-        // Store tokens (same as register page)
-        localStorage.setItem('kmit_access_token', response.access_token)
-        localStorage.setItem('kmit_refresh_token', response.refresh_token)
-        localStorage.setItem('kmit_student_id', response.sub?.toString() || '')
+        // Store tokens from the optimized response
+        if (result.data?.login) {
+          localStorage.setItem('kmit_access_token', result.data.login.access_token)
+          localStorage.setItem('kmit_refresh_token', result.data.login.refresh_token)
+          localStorage.setItem('kmit_student_id', result.data.login.sub?.toString() || '')
+        }
         
         // Store current student profile with mobile number
         const enhancedStudentProfile = {
@@ -150,7 +160,7 @@ export default function LoginPage() {
         navigate('/dashboard')
         
       } else {
-        console.error('API login failed:', response)
+        console.error('API login failed:', result)
         toast.error('Login failed. Please try again.')
       }
       
