@@ -804,7 +804,21 @@ export default function DashboardPage() {
                 {/* Present Card */}
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
                   <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {attendance?.present || 0}
+                    {(() => {
+                      // Calculate present count from all attendance data
+                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
+                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) return 0
+                      
+                      let presentCount = 0
+                      allAttendanceData.forEach((dayData: any) => {
+                        if (dayData.periods && Array.isArray(dayData.periods)) {
+                          dayData.periods.forEach((period: any) => {
+                            if (period.status === 1) presentCount++
+                          })
+                        }
+                      })
+                      return presentCount
+                    })()}
                   </div>
                   <div className="text-sm font-medium text-green-700 dark:text-green-300">
                     Present
@@ -814,7 +828,21 @@ export default function DashboardPage() {
                 {/* Absent Card */}
                 <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
                   <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {attendance?.absent || 0}
+                    {(() => {
+                      // Calculate absent count from all attendance data
+                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
+                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) return 0
+                      
+                      let absentCount = 0
+                      allAttendanceData.forEach((dayData: any) => {
+                        if (dayData.periods && Array.isArray(dayData.periods)) {
+                          dayData.periods.forEach((period: any) => {
+                            if (period.status === 0) absentCount++
+                          })
+                        }
+                      })
+                      return absentCount
+                    })()}
                   </div>
                   <div className="text-sm font-medium text-red-700 dark:text-red-300">
                     Absent
@@ -824,7 +852,21 @@ export default function DashboardPage() {
                 {/* No Sessions Card */}
                 <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center">
                   <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
-                    {attendance?.noSessions || 0}
+                    {(() => {
+                      // Calculate no sessions count from all attendance data
+                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
+                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) return 0
+                      
+                      let noSessionCount = 0
+                      allAttendanceData.forEach((dayData: any) => {
+                        if (dayData.periods && Array.isArray(dayData.periods)) {
+                          dayData.periods.forEach((period: any) => {
+                            if (period.status === 2) noSessionCount++
+                          })
+                        }
+                      })
+                      return noSessionCount
+                    })()}
                   </div>
                   <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
                     No Sessions
