@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -9,7 +9,7 @@ import {
 import toast from 'react-hot-toast'
 import { optimizedApiClient } from '@/lib/optimizedApi'
 import { StudentData } from '@/lib/api'
-import { supabaseDB, supabase } from '@/lib/supabase'
+import { supabaseDB } from '@/lib/supabase'
 
 // Helper function to convert numbers to ordinal format
 const getOrdinalSuffix = (num: number): string => {
@@ -159,6 +159,23 @@ export default function DashboardPage() {
   const [timetableData, setTimetableData] = useState<any>(null)
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set())
   const [showNetraQR, setShowNetraQR] = useState(false)
+
+  // Aggregate attendance counts (present/absent/no-session) across the fetched 2-week window
+  const attendanceCounts = useMemo(() => {
+    const details = attendanceDetails?.payload?.attendanceDetails
+    let present = 0, absent = 0, nosession = 0
+    if (Array.isArray(details)) {
+      for (const day of details) {
+        const periods = Array.isArray(day?.periods) ? day.periods : []
+        for (const p of periods) {
+          if (p?.status === 1) present++
+          else if (p?.status === 0) absent++
+          else if (p?.status === 2) nosession++
+        }
+      }
+    }
+    return { present, absent, nosession }
+  }, [attendanceDetails])
 
   // Debug: Monitor results state changes
   useEffect(() => {
@@ -800,84 +817,29 @@ export default function DashboardPage() {
               </div>
 
               {/* Attendance Summary Cards - Always Visible */}
-              <div className="grid grid-cols-3 gap-2 mt-4" style={{border: '2px solid red', padding: '10px'}}>
+              <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-4">
                 {/* Present Card */}
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center" style={{border: '1px solid green'}}>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center border border-green-200 dark:border-green-800">
                   <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {(() => {
-                      // Calculate present count from all attendance data
-                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
-                      console.log('🔍 Cards Debug - allAttendanceData:', allAttendanceData)
-                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) {
-                        console.log('🔍 Cards Debug - No attendance data, returning 0')
-                        return 0
-                      }
-                      
-                      let presentCount = 0
-                      allAttendanceData.forEach((dayData: any) => {
-                        if (dayData.periods && Array.isArray(dayData.periods)) {
-                          dayData.periods.forEach((period: any) => {
-                            if (period.status === 1) presentCount++
-                          })
-                        }
-                      })
-                      console.log('🔍 Cards Debug - Present count:', presentCount)
-                      return presentCount
-                    })()}
+                    {attendanceCounts.present}
                   </div>
-                  <div className="text-sm font-medium text-green-700 dark:text-green-300">
-                    Present
-                  </div>
+                  <div className="text-sm font-medium text-green-700 dark:text-green-300">Present</div>
                 </div>
 
                 {/* Absent Card */}
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center" style={{border: '1px solid red'}}>
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center border border-red-200 dark:border-red-800">
                   <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {(() => {
-                      // Calculate absent count from all attendance data
-                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
-                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) return 0
-                      
-                      let absentCount = 0
-                      allAttendanceData.forEach((dayData: any) => {
-                        if (dayData.periods && Array.isArray(dayData.periods)) {
-                          dayData.periods.forEach((period: any) => {
-                            if (period.status === 0) absentCount++
-                          })
-                        }
-                      })
-                      console.log('🔍 Cards Debug - Absent count:', absentCount)
-                      return absentCount
-                    })()}
+                    {attendanceCounts.absent}
                   </div>
-                  <div className="text-sm font-medium text-red-700 dark:text-red-300">
-                    Absent
-                  </div>
+                  <div className="text-sm font-medium text-red-700 dark:text-red-300">Absent</div>
                 </div>
 
                 {/* No Sessions Card */}
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center" style={{border: '1px solid gray'}}>
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                   <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
-                    {(() => {
-                      // Calculate no sessions count from all attendance data
-                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
-                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) return 0
-                      
-                      let noSessionCount = 0
-                      allAttendanceData.forEach((dayData: any) => {
-                        if (dayData.periods && Array.isArray(dayData.periods)) {
-                          dayData.periods.forEach((period: any) => {
-                            if (period.status === 2) noSessionCount++
-                          })
-                        }
-                      })
-                      console.log('🔍 Cards Debug - No Sessions count:', noSessionCount)
-                      return noSessionCount
-                    })()}
+                    {attendanceCounts.nosession}
                   </div>
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    No Sessions
-                  </div>
+                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">No Sessions</div>
                 </div>
               </div>
             </div>
