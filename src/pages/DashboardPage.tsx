@@ -818,7 +818,7 @@ export default function DashboardPage() {
                     })}
                   </div>
 
-                  {/* Attendance Summary Cards */}
+                  {/* Attendance Summary Cards - Dynamic Count */}
                   {(() => {
                     // Get all attendance data from the payload
                     const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
@@ -827,13 +827,27 @@ export default function DashboardPage() {
                       return null
                     }
 
-                    // Count attendance statuses across ALL days and periods
+                    // Sort attendance data by date (chronologically)
+                    const sortedAttendanceData = allAttendanceData.sort((a: any, b: any) => {
+                      // Handle "Today" entry - put it at the end
+                      if (a.date === "Today") return 1
+                      if (b.date === "Today") return -1
+                      
+                      // Sort by actual dates
+                      const dateA = new Date(a.date)
+                      const dateB = new Date(b.date)
+                      return dateA.getTime() - dateB.getTime()
+                    })
+
+                    console.log('📅 Sorted attendance data:', sortedAttendanceData)
+
+                    // Count attendance statuses across ALL available data
                     let presentCount = 0
                     let absentCount = 0
                     let noSessionCount = 0
 
-                    // Loop through all days in the attendance data
-                    allAttendanceData.forEach((dayData: any) => {
+                    // Loop through all attendance data chronologically
+                    sortedAttendanceData.forEach((dayData: any) => {
                       if (dayData.periods && Array.isArray(dayData.periods)) {
                         // Loop through all periods in each day
                         dayData.periods.forEach((period: any) => {
@@ -848,11 +862,11 @@ export default function DashboardPage() {
                       }
                     })
 
-                    console.log('📊 Total attendance counts:', { presentCount, absentCount, noSessionCount })
-                    console.log('📊 Total days processed:', allAttendanceData.length)
+                    console.log('📊 Dynamic attendance counts:', { presentCount, absentCount, noSessionCount })
+                    console.log('📊 Total periods processed:', presentCount + absentCount + noSessionCount)
 
                     return (
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-2 mt-4">
                         {/* Present Card */}
                         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
                           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
