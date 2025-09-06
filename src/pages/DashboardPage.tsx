@@ -800,14 +800,18 @@ export default function DashboardPage() {
               </div>
 
               {/* Attendance Summary Cards - Always Visible */}
-              <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="grid grid-cols-3 gap-2 mt-4" style={{border: '2px solid red', padding: '10px'}}>
                 {/* Present Card */}
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center" style={{border: '1px solid green'}}>
                   <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                     {(() => {
                       // Calculate present count from all attendance data
                       const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
-                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) return 0
+                      console.log('🔍 Cards Debug - allAttendanceData:', allAttendanceData)
+                      if (!allAttendanceData || !Array.isArray(allAttendanceData)) {
+                        console.log('🔍 Cards Debug - No attendance data, returning 0')
+                        return 0
+                      }
                       
                       let presentCount = 0
                       allAttendanceData.forEach((dayData: any) => {
@@ -817,6 +821,7 @@ export default function DashboardPage() {
                           })
                         }
                       })
+                      console.log('🔍 Cards Debug - Present count:', presentCount)
                       return presentCount
                     })()}
                   </div>
@@ -826,7 +831,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Absent Card */}
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center" style={{border: '1px solid red'}}>
                   <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                     {(() => {
                       // Calculate absent count from all attendance data
@@ -841,6 +846,7 @@ export default function DashboardPage() {
                           })
                         }
                       })
+                      console.log('🔍 Cards Debug - Absent count:', absentCount)
                       return absentCount
                     })()}
                   </div>
@@ -850,7 +856,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* No Sessions Card */}
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center" style={{border: '1px solid gray'}}>
                   <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
                     {(() => {
                       // Calculate no sessions count from all attendance data
@@ -865,6 +871,7 @@ export default function DashboardPage() {
                           })
                         }
                       })
+                      console.log('🔍 Cards Debug - No Sessions count:', noSessionCount)
                       return noSessionCount
                     })()}
                   </div>
