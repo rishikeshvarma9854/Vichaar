@@ -4,7 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { GraduationCap, Moon, Sun, Search, User, Hash, Eye, ArrowRight, Smartphone, Lock, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabaseDB } from '@/lib/supabase'
-import apiClient from '@/lib/api'
+import { optimizedApiClient } from '@/lib/optimizedApi'
 
 // TypeScript declarations for hCaptcha (same as register page)
 declare global {
@@ -123,19 +123,25 @@ export default function LoginPage() {
       console.log('Timestamp:', new Date().toISOString());
       console.log('Student Profile:', studentProfile);
       
-      // Use the EXACT same method as register page
-      const response = await apiClient.loginWithToken(loginPayload)
+      // Use mobile number as username (as expected by the API)
+      const result = await optimizedApiClient.loginWithFullData(
+        mobileNumber,
+        password,
+        captchaToken
+      )
       
-      console.log('🔍 API Response:', response);
+      console.log('🔍 API Response:', result);
       
-      if (response && !response.Error) {
-        // Login successful - same logic as register page
+      if (result.success) {
+        // Login successful with comprehensive data
         console.log('✅ Auto-login successful!')
         
-        // Store tokens (same as register page)
-        localStorage.setItem('kmit_access_token', response.access_token)
-        localStorage.setItem('kmit_refresh_token', response.refresh_token)
-        localStorage.setItem('kmit_student_id', response.sub?.toString() || '')
+        // Store tokens from the optimized response
+        if (result.data?.login) {
+          localStorage.setItem('kmit_access_token', result.data.login.access_token)
+          localStorage.setItem('kmit_refresh_token', result.data.login.refresh_token)
+          localStorage.setItem('kmit_student_id', result.data.login.sub?.toString() || '')
+        }
         
         // Store current student profile with mobile number
         const enhancedStudentProfile = {
@@ -150,7 +156,7 @@ export default function LoginPage() {
         navigate('/dashboard')
         
       } else {
-        console.error('API login failed:', response)
+        console.error('API login failed:', result)
         toast.error('Login failed. Please try again.')
       }
       
@@ -192,19 +198,34 @@ export default function LoginPage() {
       
       console.log('🎯 Student selected:', student)
       
-      // Get credentials for this student
-      const { data: credentials, error: credError } = await supabaseDB.getCredentials(student.mobile_number)
-      
-      if (credError || !credentials) {
-        console.error('Failed to get credentials:', credError)
-        toast.error('Student found but login failed. Please try again.')
-        return
+      // Get credentials for this student from our backend instead of direct Supabase
+      try {
+        // Validate mobile number before making the request
+        if (!student.mobile_number) {
+          console.error('❌ No mobile number available for student:', student)
+          toast.error('Student data incomplete. Please try again.')
+          return
+        }
+        
+        console.log('🔍 Fetching credentials for mobile:', student.mobile_number)
+        const response = await fetch(`https://vichaar-kappa.vercel.app/api/student-credentials?mobile_number=${encodeURIComponent(student.mobile_number)}`)
+        const result = await response.json()
+        
+        if (!result.success || !result.data) {
+          console.error('Failed to get credentials:', result.error)
+          toast.error('Student found but login failed. Please try again.')
+          return
+        }
+        
+        const credentials = result.data
+        console.log('✅ Got credentials for:', student.mobile_number)
+        
+        // Now automatically login to KMIT API using stored credentials + captcha
+        await autoLoginToKMIT(credentials.mobile_number, credentials.password, student)
+      } catch (error) {
+        console.error('Failed to get credentials:', error)
+        toast.error('Failed to get student credentials. Please try again.')
       }
-
-      console.log('Got credentials for:', student.mobile_number)
-      
-      // Now automatically login to KMIT API using stored credentials + captcha
-      await autoLoginToKMIT(credentials.mobile_number, credentials.password, student)
       
     } catch (error: any) {
       console.error('Student selection error:', error)
@@ -237,12 +258,17 @@ export default function LoginPage() {
 
   // Auto-search function (separate from form submit)
   const handleAutoSearch = async (query: string) => {
-    if (!query.trim() || query.trim().length < 2) return
+    // Validate query before proceeding
+    const trimmedQuery = query?.trim()
+    if (!trimmedQuery || trimmedQuery.length < 2) {
+      console.log('❌ Query too short or empty, skipping search')
+      return
+    }
     
     setIsLoading(true)
     
     try {
-      console.log('🔍 Auto-search for:', query.trim())
+      console.log('🔍 Auto-search for:', trimmedQuery)
       
       // Enhanced search: Try multiple search strategies with better prioritization
       let searchResults = null
@@ -250,70 +276,96 @@ export default function LoginPage() {
       let currentStrategy = ''
       
       // Strategy 1: Try exact hall ticket match first (fastest and most accurate)
-      if (/^[A-Z0-9]+$/.test(query.trim())) {
-        console.log('🔍 Fast search by exact hall ticket:', query.trim())
-        const result = await supabaseDB.searchByHallTicket(query.trim())
-        searchResults = result.data
-        searchError = result.error
-        if (searchResults && searchResults.length > 0) {
-          console.log('✅ Found exact hall ticket match')
-          currentStrategy = 'exact-hall-ticket'
+      if (/^[A-Z0-9]+$/.test(trimmedQuery)) {
+        console.log('🔍 Fast search by exact hall ticket:', trimmedQuery)
+        try {
+          const searchUrl = `https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(trimmedQuery)}&type=exact`
+          console.log('🔗 Making request to:', searchUrl)
+          const response = await fetch(searchUrl)
+          const result = await response.json()
+          if (result.success && result.data) {
+            searchResults = result.data
+            searchError = null
+            console.log('✅ Found exact hall ticket match')
+            currentStrategy = 'exact-hall-ticket'
+          }
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
       // Strategy 2: If no results, try partial hall ticket search
-      if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
-        console.log('🔍 Partial hall ticket search:', query.trim())
-        const result = await supabaseDB.searchByPartialHallTicket(query.trim())
-        if (result.data && result.data.length > 0) {
-          searchResults = result.data
-          searchError = result.error
-          console.log('✅ Found partial hall ticket matches')
-          currentStrategy = 'partial-hall-ticket'
+      if ((!searchResults || searchResults.length === 0) && trimmedQuery.length >= 2) {
+        console.log('🔍 Partial hall ticket search:', trimmedQuery)
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(trimmedQuery)}&type=partial`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            searchResults = result.data
+            searchError = null
+            console.log('✅ Found partial hall ticket matches')
+            currentStrategy = 'partial-hall-ticket'
+          }
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
       // Strategy 3: If still no results, try improved name search
-      if ((!searchResults || searchResults.length === 0) && query.trim().length >= 2) {
-        console.log('🔍 Improved name search:', query.trim())
-        const result = await supabaseDB.searchByName(query.trim())
-        if (result.data && result.data.length > 0) {
-          searchResults = result.data
-          searchError = result.error
-          console.log('✅ Found name matches')
-          currentStrategy = 'name-search'
+      if ((!searchResults || searchResults.length === 0) && trimmedQuery.length >= 2) {
+        console.log('🔍 Improved name search:', trimmedQuery)
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(trimmedQuery)}&type=name`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            searchResults = result.data
+            searchError = null
+            console.log('✅ Found name matches')
+            currentStrategy = 'name-search'
+          }
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
       // Strategy 4: If still no results, try broader search with better filtering
       if (!searchResults || searchResults.length === 0) {
-        console.log('🔍 Broad search with filtering:', query.trim())
-        const result = await supabaseDB.searchStudent(query.trim())
-        if (result.data && result.data.length > 0) {
-          // Filter results to prioritize better matches
-          const filteredResults = result.data.filter((student: any) => {
-            const queryUpper = query.trim().toUpperCase()
-            const nameUpper = (student.name || '').toUpperCase()
-            const hallTicketUpper = (student.hall_ticket || '').toUpperCase()
+        console.log('🔍 Broad search with filtering:', trimmedQuery)
+        try {
+          const response = await fetch(`https://vichaar-kappa.vercel.app/api/search-students?q=${encodeURIComponent(trimmedQuery)}&type=broad`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            // Filter results to prioritize better matches
+            const filteredResults = result.data.filter((student: any) => {
+              const queryUpper = trimmedQuery.toUpperCase()
+              const nameUpper = (student.name || '').toUpperCase()
+              const hallTicketUpper = (student.hall_ticket || '').toUpperCase()
+              
+              // Prioritize results that start with the query
+              const nameStartsWith = nameUpper.startsWith(queryUpper)
+              const hallTicketStartsWith = hallTicketUpper.startsWith(queryUpper)
+              
+              return nameStartsWith || hallTicketStartsWith || 
+                     nameUpper.includes(queryUpper) || 
+                     hallTicketUpper.includes(queryUpper)
+            })
             
-            // Prioritize results that start with the query
-            const nameStartsWith = nameUpper.startsWith(queryUpper)
-            const hallTicketStartsWith = hallTicketUpper.startsWith(queryUpper)
-            
-            return nameStartsWith || hallTicketStartsWith || 
-                   nameUpper.includes(queryUpper) || 
-                   hallTicketUpper.includes(queryUpper)
-          })
-          
-          if (filteredResults.length > 0) {
-            searchResults = filteredResults
-            currentStrategy = 'filtered-broad-search'
-          } else {
-            searchResults = result.data
-            currentStrategy = 'broad-search'
+            if (filteredResults.length > 0) {
+              searchResults = filteredResults
+              currentStrategy = 'filtered-broad-search'
+            } else {
+              searchResults = result.data
+              currentStrategy = 'broad-search'
+            }
+            searchError = null
+            console.log('✅ Found broad search matches')
           }
-          searchError = result.error
-          console.log('✅ Found broad search matches')
+        } catch (error) {
+          console.error('Search error:', error)
+          searchError = error
         }
       }
       
@@ -326,29 +378,29 @@ export default function LoginPage() {
       console.log('Search strategy used:', currentStrategy)
       
       if (searchResults && searchResults.length > 0) {
-        // Sort results by relevance
-        const sortedResults = searchResults.sort((a: any, b: any) => {
-          const queryUpper = query.trim().toUpperCase()
-          const aName = (a.name || '').toUpperCase()
-          const bName = (b.name || '').toUpperCase()
-          const aHallTicket = (a.hall_ticket || '').toUpperCase()
-          const bHallTicket = (b.hall_ticket || '').toUpperCase()
-          
-          // Exact matches first
-          if (aName === queryUpper || aHallTicket === queryUpper) return -1
-          if (bName === queryUpper || bHallTicket === queryUpper) return 1
-          
-          // Starts with query
-          if (aName.startsWith(queryUpper) || aHallTicket.startsWith(queryUpper)) return -1
-          if (bName.startsWith(queryUpper) || bHallTicket.startsWith(queryUpper)) return 1
-          
-          // Contains query
-          if (aName.includes(queryUpper) || aHallTicket.includes(queryUpper)) return -1
-          if (bName.includes(queryUpper) || bHallTicket.includes(queryUpper)) return 1
-          
-          // Default sort by name
-          return aName.localeCompare(bName)
-        })
+                 // Sort results by relevance
+         const sortedResults = searchResults.sort((a: any, b: any) => {
+           const queryUpper = trimmedQuery.toUpperCase()
+           const aName = (a.name || '').toUpperCase()
+           const bName = (b.name || '').toUpperCase()
+           const aHallTicket = (a.hall_ticket || '').toUpperCase()
+           const bHallTicket = (b.hall_ticket || '').toUpperCase()
+           
+           // Exact matches first
+           if (aName === queryUpper || aHallTicket === queryUpper) return -1
+           if (bName === queryUpper || bHallTicket === queryUpper) return 1
+           
+           // Starts with query
+           if (aName.startsWith(queryUpper) || aHallTicket.startsWith(queryUpper)) return -1
+           if (bName.startsWith(queryUpper) || bHallTicket.startsWith(queryUpper)) return 1
+           
+           // Contains query
+           if (aName.includes(queryUpper) || aHallTicket.includes(queryUpper)) return -1
+           if (bName.includes(queryUpper) || bHallTicket.includes(queryUpper)) return 1
+           
+           // Default sort by name
+           return aName.localeCompare(bName)
+         })
         
         setSearchResults(sortedResults)
         setSearchStrategy(currentStrategy)

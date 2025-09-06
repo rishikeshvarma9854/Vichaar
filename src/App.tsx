@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import SearchPage from './pages/SearchPage'
 import ResultsPage from './pages/ResultsPage'
 import LoadingSpinner from './components/LoadingSpinner'
+import CachePage from './pages/CachePage'
 
 function App() {
   const [isLoading, setIsLoading] = useState(true)
@@ -35,7 +36,10 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/results" element={<ResultsPage />} />
+            <Route path="/cache" element={<CachePage />} />
           </Routes>
+          
+          {/* Cache Monitor removed - moved to protected /cache route */}
         </div>
       </AuthProvider>
     </ThemeProvider>
