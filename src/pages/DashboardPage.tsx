@@ -771,53 +771,123 @@ export default function DashboardPage() {
                   Loading attendance data...
                 </div>
               ) : (
-                <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                  {Array.from({ length: 7 }, (_, index) => {
-                    // Find the actual "Today" entry in the attendance details
-                    const todayData = attendanceDetails?.payload?.attendanceDetails?.find((day: any) => day.date === "Today")
-                    const period = todayData?.periods?.[index]
-                    let color = 'bg-gray-300 dark:bg-gray-600'
-                    let icon = null
-                    
-                    console.log(`Dashboard Period ${index + 1}:`, period)
-                    console.log(`Dashboard Today data:`, todayData)
-                    console.log(`Dashboard attendanceDetails state:`, attendanceDetails)
-                    console.log(`Dashboard attendance state:`, attendance)
-                    
-                    if (period) {
-                      console.log(`Period ${index + 1} status:`, period.status, typeof period.status)
-                      // Check for different possible status values
-                      if (period.status === 1) {
-                        color = 'bg-green-500'
-                        icon = <Check className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
-                        console.log(`Period ${index + 1} marked as PRESENT`)
-                      } else if (period.status === 0) {
-                        color = 'bg-red-500'
-                        icon = <X className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
-                        console.log(`Period ${index + 1} marked as ABSENT`)
-                      } else if (period.status === 2) {
-                        color = 'bg-gray-300 dark:bg-gray-600'
-                        icon = null
-                        console.log(`Period ${index + 1} marked as NO SESSION`)
+                <>
+                  <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-4">
+                    {Array.from({ length: 7 }, (_, index) => {
+                      // Find the actual "Today" entry in the attendance details
+                      const todayData = attendanceDetails?.payload?.attendanceDetails?.find((day: any) => day.date === "Today")
+                      const period = todayData?.periods?.[index]
+                      let color = 'bg-gray-300 dark:bg-gray-600'
+                      let icon = null
+                      
+                      console.log(`Dashboard Period ${index + 1}:`, period)
+                      console.log(`Dashboard Today data:`, todayData)
+                      console.log(`Dashboard attendanceDetails state:`, attendanceDetails)
+                      console.log(`Dashboard attendance state:`, attendance)
+                      
+                      if (period) {
+                        console.log(`Period ${index + 1} status:`, period.status, typeof period.status)
+                        // Check for different possible status values
+                        if (period.status === 1) {
+                          color = 'bg-green-500'
+                          icon = <Check className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
+                          console.log(`Period ${index + 1} marked as PRESENT`)
+                        } else if (period.status === 0) {
+                          color = 'bg-red-500'
+                          icon = <X className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
+                          console.log(`Period ${index + 1} marked as ABSENT`)
+                        } else if (period.status === 2) {
+                          color = 'bg-gray-300 dark:bg-gray-600'
+                          icon = null
+                          console.log(`Period ${index + 1} marked as NO SESSION`)
+                        } else {
+                          console.log(`Period ${index + 1} status unknown:`, period.status)
+                        }
                       } else {
-                        console.log(`Period ${index + 1} status unknown:`, period.status)
+                        console.log(`No period data for index ${index}`)
                       }
-                    } else {
-                      console.log(`No period data for index ${index}`)
-                    }
-                    
-                    return (
-                      <div key={index} className="flex flex-col items-center">
-                        <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${color} flex items-center justify-center mb-1`}>
-                          {icon}
+                      
+                      return (
+                        <div key={index} className="flex flex-col items-center">
+                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${color} flex items-center justify-center mb-1`}>
+                            {icon}
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {period?.period_no ? `P${period.period_no}` : `P${index + 1}`}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {period?.period_no ? `P${period.period_no}` : `P${index + 1}`}
-                        </span>
+                      )
+                    })}
+                  </div>
+
+                  {/* Attendance Summary Cards */}
+                  {(() => {
+                    // Get all attendance data from the payload
+                    const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
+                    
+                    if (!allAttendanceData || !Array.isArray(allAttendanceData)) {
+                      return null
+                    }
+
+                    // Count attendance statuses across ALL days and periods
+                    let presentCount = 0
+                    let absentCount = 0
+                    let noSessionCount = 0
+
+                    // Loop through all days in the attendance data
+                    allAttendanceData.forEach((dayData: any) => {
+                      if (dayData.periods && Array.isArray(dayData.periods)) {
+                        // Loop through all periods in each day
+                        dayData.periods.forEach((period: any) => {
+                          if (period.status === 1) {
+                            presentCount++
+                          } else if (period.status === 0) {
+                            absentCount++
+                          } else if (period.status === 2) {
+                            noSessionCount++
+                          }
+                        })
+                      }
+                    })
+
+                    console.log('📊 Total attendance counts:', { presentCount, absentCount, noSessionCount })
+                    console.log('📊 Total days processed:', allAttendanceData.length)
+
+                    return (
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* Present Card */}
+                        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                            {presentCount}
+                          </div>
+                          <div className="text-sm font-medium text-green-700 dark:text-green-300">
+                            Present
+                          </div>
+                        </div>
+
+                        {/* Absent Card */}
+                        <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                            {absentCount}
+                          </div>
+                          <div className="text-sm font-medium text-red-700 dark:text-red-300">
+                            Absent
+                          </div>
+                        </div>
+
+                        {/* No Sessions Card */}
+                        <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
+                            {noSessionCount}
+                          </div>
+                          <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                            No Sessions
+                          </div>
+                        </div>
                       </div>
                     )
-                  })}
-                </div>
+                  })()}
+                </>
               )}
             </div>
           </div>
