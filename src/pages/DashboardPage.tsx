@@ -819,86 +819,94 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Attendance Summary Cards - Dynamic Count */}
-                  {(() => {
-                    // Get all attendance data from the payload
-                    const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
-                    
-                    if (!allAttendanceData || !Array.isArray(allAttendanceData)) {
-                      return null
-                    }
-
-                    // Sort attendance data by date (chronologically)
-                    const sortedAttendanceData = allAttendanceData.sort((a: any, b: any) => {
-                      // Handle "Today" entry - put it at the end
-                      if (a.date === "Today") return 1
-                      if (b.date === "Today") return -1
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    {(() => {
+                      // Get all attendance data from the payload
+                      const allAttendanceData = attendanceDetails?.payload?.attendanceDetails
                       
-                      // Sort by actual dates
-                      const dateA = new Date(a.date)
-                      const dateB = new Date(b.date)
-                      return dateA.getTime() - dateB.getTime()
-                    })
+                      console.log('🔍 Attendance data check:', {
+                        hasAttendanceDetails: !!attendanceDetails,
+                        hasPayload: !!attendanceDetails?.payload,
+                        hasAttendanceDetailsArray: !!allAttendanceData,
+                        isArray: Array.isArray(allAttendanceData),
+                        dataLength: allAttendanceData?.length
+                      })
 
-                    console.log('📅 Sorted attendance data:', sortedAttendanceData)
+                      // Initialize counts
+                      let presentCount = 0
+                      let absentCount = 0
+                      let noSessionCount = 0
 
-                    // Count attendance statuses across ALL available data
-                    let presentCount = 0
-                    let absentCount = 0
-                    let noSessionCount = 0
+                      if (allAttendanceData && Array.isArray(allAttendanceData)) {
+                        // Sort attendance data by date (chronologically)
+                        const sortedAttendanceData = allAttendanceData.sort((a: any, b: any) => {
+                          // Handle "Today" entry - put it at the end
+                          if (a.date === "Today") return 1
+                          if (b.date === "Today") return -1
+                          
+                          // Sort by actual dates
+                          const dateA = new Date(a.date)
+                          const dateB = new Date(b.date)
+                          return dateA.getTime() - dateB.getTime()
+                        })
 
-                    // Loop through all attendance data chronologically
-                    sortedAttendanceData.forEach((dayData: any) => {
-                      if (dayData.periods && Array.isArray(dayData.periods)) {
-                        // Loop through all periods in each day
-                        dayData.periods.forEach((period: any) => {
-                          if (period.status === 1) {
-                            presentCount++
-                          } else if (period.status === 0) {
-                            absentCount++
-                          } else if (period.status === 2) {
-                            noSessionCount++
+                        console.log('📅 Sorted attendance data:', sortedAttendanceData)
+
+                        // Loop through all attendance data chronologically
+                        sortedAttendanceData.forEach((dayData: any) => {
+                          if (dayData.periods && Array.isArray(dayData.periods)) {
+                            // Loop through all periods in each day
+                            dayData.periods.forEach((period: any) => {
+                              if (period.status === 1) {
+                                presentCount++
+                              } else if (period.status === 0) {
+                                absentCount++
+                              } else if (period.status === 2) {
+                                noSessionCount++
+                              }
+                            })
                           }
                         })
+
+                        console.log('📊 Dynamic attendance counts:', { presentCount, absentCount, noSessionCount })
+                        console.log('📊 Total periods processed:', presentCount + absentCount + noSessionCount)
                       }
-                    })
 
-                    console.log('📊 Dynamic attendance counts:', { presentCount, absentCount, noSessionCount })
-                    console.log('📊 Total periods processed:', presentCount + absentCount + noSessionCount)
+                      return (
+                        <>
+                          {/* Present Card */}
+                          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              {presentCount}
+                            </div>
+                            <div className="text-sm font-medium text-green-700 dark:text-green-300">
+                              Present
+                            </div>
+                          </div>
 
-                    return (
-                      <div className="grid grid-cols-3 gap-2 mt-4">
-                        {/* Present Card */}
-                        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
-                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                            {presentCount}
+                          {/* Absent Card */}
+                          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                              {absentCount}
+                            </div>
+                            <div className="text-sm font-medium text-red-700 dark:text-red-300">
+                              Absent
+                            </div>
                           </div>
-                          <div className="text-sm font-medium text-green-700 dark:text-green-300">
-                            Present
-                          </div>
-                        </div>
 
-                        {/* Absent Card */}
-                        <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
-                          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                            {absentCount}
+                          {/* No Sessions Card */}
+                          <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
+                              {noSessionCount}
+                            </div>
+                            <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                              No Sessions
+                            </div>
                           </div>
-                          <div className="text-sm font-medium text-red-700 dark:text-red-300">
-                            Absent
-                          </div>
-                        </div>
-
-                        {/* No Sessions Card */}
-                        <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 text-center">
-                          <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
-                            {noSessionCount}
-                          </div>
-                          <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                            No Sessions
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })()}
+                        </>
+                      )
+                    })()}
+                  </div>
                 </>
               )}
             </div>
