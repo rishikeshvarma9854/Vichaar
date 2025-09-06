@@ -1,10 +1,50 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase configuration
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'your-supabase-url'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-supabase-anon-key'
+// Supabase configuration with proper validation
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Create mock client for when Supabase is not configured
+const createMockClient = () => ({
+  from: () => ({
+    select: () => ({ data: [], error: { message: 'Supabase not configured' } }),
+    insert: () => ({ data: null, error: { message: 'Supabase not configured' } }),
+    update: () => ({ data: null, error: { message: 'Supabase not configured' } }),
+    delete: () => ({ data: null, error: { message: 'Supabase not configured' } }),
+    eq: () => ({ data: [], error: { message: 'Supabase not configured' } }),
+    ilike: () => ({ data: [], error: { message: 'Supabase not configured' } }),
+    or: () => ({ data: [], error: { message: 'Supabase not configured' } }),
+    limit: () => ({ data: [], error: { message: 'Supabase not configured' } }),
+    order: () => ({ data: [], error: { message: 'Supabase not configured' } }),
+    execute: () => ({ data: [], error: { message: 'Supabase not configured' } })
+  }),
+  auth: {
+    signIn: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+    signUp: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+    signOut: () => Promise.resolve({ error: { message: 'Supabase not configured' } }),
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
+  }
+})
+
+// Validate environment variables and create appropriate client
+let supabase: any
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Supabase environment variables are missing!')
+  console.error('Please create a .env file with:')
+  console.error('VITE_SUPABASE_URL=your-supabase-url')
+  console.error('VITE_SUPABASE_ANON_KEY=your-supabase-anon-key')
+  
+  // Create a mock client to prevent crashes
+  supabase = createMockClient()
+} else {
+  // Create real Supabase client
+  supabase = createClient(supabaseUrl, supabaseAnonKey)
+  console.log('✅ Supabase client initialized successfully')
+}
+
+export { supabase }
 
 // Database table types
 export interface StudentCredentials {
